@@ -55,3 +55,4 @@ Build with `npm run build` and serve the `dist` directory from a static host or 
 - Customer order tracking via server-sent events or WebSockets.
 - Payment provider integrations, printer integrations, receipts, and scheduled reports.
 - Automated unit, API, accessibility, and end-to-end tests.
+"# Resturant_QR_System" 
