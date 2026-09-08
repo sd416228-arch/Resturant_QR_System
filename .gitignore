@@ -12,6 +12,14 @@ dist
 dist-ssr
 *.local
 
+# Environment (contains QR_TOKEN_SECRET)
+.env
+.env.local
+
+# Runtime data (restaurant orders are regenerated at runtime)
+data/orders.json
+data/*.tmp
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

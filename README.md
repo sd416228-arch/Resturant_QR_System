@@ -1,58 +1,117 @@
 # Sprig Restaurant QR Menu
 
-A responsive Restaurant QR Menu and Ordering System MVP built with React, TypeScript, and Vite.
+QR ordering + kitchen display built with React, TypeScript, Vite, and a small Node API.
 
-## Current architecture
+## What this is
 
-- `src/App.tsx`: typed domain models, local persistence, admin navigation, customer menu, cart, ordering, kitchen flow, table QR controls, and reports.
-- `src/index.css`: responsive design system for the admin workspace and mobile-first customer experience.
-- Browser `localStorage`: persistence for menu items and orders in this frontend-only build. This makes the flows functional during development without pretending to have a remote database.
+A working single-restaurant ordering loop:
 
-## Included workflows
+```
+customer scans table QR → fetches the live menu from the API
+  → builds a cart → order POSTed to the server
+  → server validates every item + recomputes the price against the canonical menu
+  → kitchen display polls the API → staff move the order through statuses
+  → customer sees confirmation + receives status updates
+```
 
-- Owner dashboard with live order totals, revenue, popular items, recent orders, and a revenue chart.
-- Menu management: quick-add menu items and enable/disable availability.
-- Order queue with status transitions: New, Preparing, Ready, Completed, and Cancelled.
-- Kitchen display with ticket actions and customer notes.
-- Tables and QR management view with table state, QR action feedback, and print action feedback.
-- Reports for sales, volume, average order value, category share, and peak times.
-- Customer preview with restaurant branding, category filtering, search, item cards, cart, and order submission.
+The server owns the menu. `data/menu.json` is the single source of truth that
+every device (the owner's admin tab **and** every customer phone) loads from, so
+an owner's menu edit appears on customer devices on their next load. Customer
+orders and kitchen/order statuses live in `data/orders.json` on the server.
 
 ## Run locally
 
 ```bash
 npm install
-npm run dev
+npm run api     # starts the API on http://localhost:8787
+npm run dev     # starts Vite on http://localhost:5173
 ```
 
-Open the local URL printed by Vite. Use **Preview menu** to switch into the customer experience. Admin changes and orders persist in the browser.
+Open `http://localhost:5173` for the admin dashboard. The API URL is derived
+from `window.location.hostname` port `8787`, so testing from a phone on the same
+LAN works out of the box when you set `VITE_PUBLIC_URL` to your machine's LAN IP.
+
+To try the customer flow without scanning: start the API and open
+`http://localhost:8787/api/tables/token` via a POST for a table number, then visit
+`http://localhost:5173/?t=<returned-token>`.
+
+Use the **Tables & QR** view to download real QR codes per table.
+
+## Project structure
+
+```
+src/
+  components/      Admin and customer views (Overview, Orders, Kitchen, Menu,
+                   Tables & QR, Reports, Customer, shared UI)
+  hooks/           useMenu (server-backed canonical menu), useOrders (polling)
+  lib/             api.ts (typed API client), money.ts (integer-paisa NPR formatting)
+  types.ts         Domain models (MenuItem, Order, OrderLine, …)
+server.mjs         Validated HTTP API (menu, orders, table-QR tokens)
+data/menu.json     Canonical menu (the source of truth)
+data/orders.json   Stored orders (server-owned)
+```
+
+## API
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/menu` | Canonical menu for all devices |
+| PUT | `/api/menu` | Owner saves menu edits (persisted server-side) |
+| GET | `/api/orders` | Order queue (admin/kitchen) |
+| POST | `/api/orders` | Customer places an order |
+| PATCH | `/api/orders/:id` | Status transition (New → Preparing → Ready → …) |
+| POST | `/api/tables/token` | Issue a signed, opaque table QR token |
+| GET | `/api/tables/verify?token=` | Resolve a QR token back to a table |
+| GET | `/api/health` | Health / readiness |
+
+### What the server enforces
+
+- **Server-side pricing.** Order totals are recomputed from `data/menu.json`.
+  A client cannot send its own `total`; unknown items and invalid quantities are
+  rejected. Table numbers come from the verified QR token, never the request.
+- **Guarded JSON parsing.** Malformed bodies return `400` instead of crashing.
+- **Status validation.** Only the five known statuses are accepted, and completed /
+  cancelled orders are locked (`409`).
+- **Signed table tokens.** QR codes encode an HMAC-signed opaque token, not a raw
+  `?table=99`. Tokens are bound to the restaurant id and verified server-side.
+- **Rate limiting.** Order POSTs are capped per-IP (30/min) to blunt scripted spam.
+- **Atomic file writes.** Orders are written to a temp file then renamed.
+- **Restricted CORS.** `ALLOWED_ORIGIN` (env) restricts which origins may call the
+  API; defaults to wildcard in development with a console warning.
+
+## Environment
+
+Copy `.env.example` to `.env` and set at least:
+
+- `VITE_PUBLIC_URL` — the URL your QR codes point to (your machine's LAN IP when
+  testing from a phone).
+- `QR_TOKEN_SECRET` — a long random string. Without it the server uses a dev-only
+  default and warns on startup.
+- `ALLOWED_ORIGIN` — set to your frontend origin in production.
+
+`npm run api` loads `.env` automatically (Node ≥ 22).
 
 ## Validate
 
 ```bash
-npm run build
-npm run lint
+npm run build   # tsc + vite build
+npm run lint    # oxlint
 ```
 
-## Production architecture to add
+## Honest-numbers guarantee
 
-For a deployable SaaS, replace the local storage adapter with a backend API and PostgreSQL database. Suggested tables are `users`, `restaurants`, `staff`, `categories`, `menu_items`, `restaurant_tables`, `qr_codes`, `orders`, `order_items`, `payments`, and `settings`. Every tenant-owned record should carry `restaurant_id`, with composite indexes such as `(restaurant_id, created_at)` and database row-level security where supported.
+Every number in the admin dashboard is computed from real data:
+`data/orders.json` drives revenue, order volume, averages, dish-share bars, and
+peak ordering hours. There is no fabricated padding. The date is always today's.
 
-Authentication should use secure, HTTP-only sessions with CSRF protection, role checks at the API boundary, schema validation, rate limiting on public order endpoints, and transaction-based order creation. QR payloads should contain an opaque signed restaurant/table token rather than trusted raw identifiers.
+## What is intentionally not built yet
 
-Payment methods are intentionally recorded only as order metadata in this MVP: Cash, Bank, Digital wallet, Card, and Other. No payment gateway is connected.
+- Authentication and staff roles (the API has no owner login — the admin UI is a
+  local dashboard; secure before deploying beyond trusted devices).
+- PostgreSQL / multi-tenancy (file-backed storage serves one restaurant).
+- Payment gateway recording.
+- Offline-first customer ordering (requires connectivity to place an order).
+- WebSocket live updates (the UI polls every 2s).
 
-## Deployment
-
-Build with `npm run build` and serve the `dist` directory from a static host or CDN. A production release should deploy the frontend alongside the authenticated API, database migrations, object storage for menu images, monitoring, backups, and audit logging.
-
-## Future SaaS improvements
-
-- Multi-user invitations and role-based staff permissions.
-- PostgreSQL-backed tenant isolation and migrations.
-- Real QR image generation/download/print, signed QR rotation, and disabled token handling.
-- Image uploads, drag-and-drop menu reordering, category editing, taxes, discounts, and modifiers.
-- Customer order tracking via server-sent events or WebSockets.
-- Payment provider integrations, printer integrations, receipts, and scheduled reports.
-- Automated unit, API, accessibility, and end-to-end tests.
-"# Resturant_QR_System" 
+See the roadmap in your pitch deck: backend + DB, staff auth, payment recording,
+and customer order-tracking are the next milestones for a production deployment.

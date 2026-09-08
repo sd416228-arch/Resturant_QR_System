@@ -1,0 +1,48 @@
+.toast{position:fixed;bottom:24px;right:28px;background:var(--green);color:#fff;padding:12px 16px;border-radius:5px;font-size:12px;box-shadow:0 8px 20px #2f4d3d44;z-index:5}
+
+.empty-note{color:var(--muted);font-size:13px;padding:16px 0;text-align:center;margin:0}
+
+.api-banner{background:#fbe9e3;color:var(--rust);font-size:12px;padding:10px 26px;border-bottom:1px solid #f3d5c9}
+.api-banner code{background:#fff;padding:1px 5px;border-radius:4px}
+
+.loading-note{padding:10px 26px;font-size:12px;color:var(--muted)}.loading-note:empty{display:none}
+
+.recent-list{display:grid;gap:6px;margin-top:12px}
+.recent-row{display:flex;gap:12px;align-items:center;font-size:13px;padding:8px 0;border-bottom:1px solid var(--line)}
+.recent-row b:first-child{min-width:56px}
+.recent-row span:nth-child(2){color:var(--muted)}
+.recent-row b:last-child{margin-left:auto}
+
+.revenue-total{font:700 32px 'Playfair Display',serif;color:var(--green);margin:16px 0 0}
+
+.menu-toolbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:18px}
+.quick-add{display:flex;gap:8px;align-items:center;flex:1;min-width:280px}
+.quick-add input{border:1px solid var(--line);background:var(--paper);border-radius:6px;padding:8px 10px;font-size:13px;flex:1 1 0}
+.quick-add .primary-button{padding:9px 14px}
+
+.edit-row{display:flex;gap:8px;align-items:center;padding:10px 14px;background:var(--paper);border:1px solid var(--line);border-radius:8px;margin-bottom:14px;flex-wrap:wrap}
+.edit-row input{border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-size:13px;flex:1 1 160px}
+
+.menu-row img{width:74px;height:74px;object-fit:cover;border-radius:9px;flex-shrink:0}
+.img-placeholder{width:74px;height:74px;border-radius:9px;background:#edf0e8;flex-shrink:0}
+
+/* --- Customer order confirmation --- */
+.confirm-line{display:flex;gap:10px;align-items:baseline;padding:10px 0;border-bottom:1px solid var(--line);font-size:14px}
+.confirm-line span:nth-child(2){flex:1}
+.confirm-line span:last-child{color:var(--muted)}
+
+.confirm-total{display:flex;justify-content:space-between;font-size:16px;padding:14px 0}
+
+.note-field{display:grid;gap:6px;font-size:12px;color:var(--muted);margin-top:6px}
+.note-field input{border:1px solid var(--line);background:var(--paper);border-radius:8px;padding:10px;font-size:14px}
+
+.confirm-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
+
+.order-error{color:var(--rust);font-size:13px;margin:12px 0 0;background:#fbe9e3;padding:10px;border-radius:6px}
+
+/* --- Customer order status --- */
+.status-timeline{display:grid;gap:18px;margin:20px 0;padding:0 6px}
+.status-step{display:flex;align-items:center;gap:12px;font-size:14px;color:var(--muted)}
+.status-step i{width:14px;height:14px;border-radius:50%;background:var(--line);display:inline-block;flex-shrink:0}
+.status-step.active{color:var(--green);font-weight:700}
+.status-step.active i{background:var(--rust)}
