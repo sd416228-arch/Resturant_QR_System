@@ -31,11 +31,6 @@ export default function Overview({ orders }: { orders: Order[] }) {
       <PageTitle
         eyebrow={new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }).format(new Date())}
         title={`${todayGreeting()}, Jordan`}
-        action={
-          <a className="primary-button" href="/?restaurant=moss-ember&table=04">
-            ＋ New order
-          </a>
-        }
       />
       <section className="stat-grid">
         {stats.map((stat) => (

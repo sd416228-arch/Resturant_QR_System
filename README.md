@@ -56,13 +56,15 @@ data/orders.json   Stored orders (server-owned)
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/api/menu` | Canonical menu for all devices |
-| PUT | `/api/menu` | Owner saves menu edits (persisted server-side) |
+| PUT | `/api/menu` | 🔒 Owner saves menu edits (persisted server-side) |
 | GET | `/api/orders` | Order queue (admin/kitchen) |
 | POST | `/api/orders` | Customer places an order |
 | PATCH | `/api/orders/:id` | Status transition (New → Preparing → Ready → …) |
-| POST | `/api/tables/token` | Issue a signed, opaque table QR token |
+| POST | `/api/tables/token` | 🔒 Issue a signed, opaque table QR token |
 | GET | `/api/tables/verify?token=` | Resolve a QR token back to a table |
 | GET | `/api/health` | Health / readiness |
+
+🔒 = requires `Authorization: Bearer <ADMIN_TOKEN>` when a token is configured.
 
 ### What the server enforces
 
@@ -74,6 +76,10 @@ data/orders.json   Stored orders (server-owned)
   cancelled orders are locked (`409`).
 - **Signed table tokens.** QR codes encode an HMAC-signed opaque token, not a raw
   `?table=99`. Tokens are bound to the restaurant id and verified server-side.
+- **Authenticated owner writes.** `PUT /api/menu` and `POST /api/tables/token`
+  require `Authorization: Bearer <ADMIN_TOKEN>` once a token is configured, so a
+  stranger on the network can't rewrite the menu or mint their own QR codes.
+  Unconfigured, these stay open (development only, warned on startup).
 - **Rate limiting.** Order POSTs are capped per-IP (30/min) to blunt scripted spam.
 - **Atomic file writes.** Orders are written to a temp file then renamed.
 - **Restricted CORS.** `ALLOWED_ORIGIN` (env) restricts which origins may call the
@@ -87,6 +93,9 @@ Copy `.env.example` to `.env` and set at least:
   testing from a phone).
 - `QR_TOKEN_SECRET` — a long random string. Without it the server uses a dev-only
   default and warns on startup.
+- `ADMIN_TOKEN` — a long random string guarding the owner write endpoints
+  (menu edits, QR token issuance). Mirror it in `VITE_ADMIN_TOKEN` for the admin
+  UI. Without it those endpoints stay open and the server warns on startup.
 - `ALLOWED_ORIGIN` — set to your frontend origin in production.
 
 `npm run api` loads `.env` automatically (Node ≥ 22).
@@ -106,8 +115,9 @@ peak ordering hours. There is no fabricated padding. The date is always today's.
 
 ## What is intentionally not built yet
 
-- Authentication and staff roles (the API has no owner login — the admin UI is a
-  local dashboard; secure before deploying beyond trusted devices).
+- Authentication and staff roles (owner write endpoints are guarded by a shared
+  bearer token — `ADMIN_TOKEN` — but there is no per-user login or role model;
+  secure before deploying beyond trusted devices).
 - PostgreSQL / multi-tenancy (file-backed storage serves one restaurant).
 - Payment gateway recording.
 - Offline-first customer ordering (requires connectivity to place an order).

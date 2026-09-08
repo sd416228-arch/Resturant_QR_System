@@ -41,6 +41,11 @@ const ORDER_STATUSES = ['New', 'Preparing', 'Ready', 'Completed', 'Cancelled']
 const RESTAURANT_ID = process.env.RESTAURANT_ID || 'moss-ember'
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || ''
 
+// Bearer secret guarding the owner-only write endpoints (menu edits, token
+// issuance). When empty (development) those endpoints stay open, matching the
+// local-network trust model. Set ADMIN_TOKEN before deploying further.
+const ADMIN_SECRET = process.env.ADMIN_TOKEN || process.env.API_SECRET || ''
+
 // --- Crypto / QR tokens ------------------------------------------------------
 
 const TOKEN_SECRET = process.env.QR_TOKEN_SECRET || process.env.API_SECRET || `dev-only-secret-${RESTAURANT_ID}`
@@ -64,6 +69,17 @@ function verifyTableToken(token) {
   const [rid, table] = payload.split(':')
   if (rid !== RESTAURANT_ID) return null
   return table
+}
+
+// Guard for owner-only endpoints. Once ADMIN_SECRET is set, the request must
+// carry Authorization: Bearer <secret>; comparison is timing-safe.
+function isAuthorized(request) {
+  if (!ADMIN_SECRET) return true
+  const header = String(request.headers['authorization'] || '')
+  if (!header.startsWith('Bearer ')) return false
+  const provided = Buffer.from(header.slice('Bearer '.length))
+  const expected = Buffer.from(ADMIN_SECRET)
+  return provided.length === expected.length && timingSafeEqual(provided, expected)
 }
 
 // --- Validation -------------------------------------------------------------
@@ -143,7 +159,7 @@ function setCorsHeaders(response) {
   response.setHeader('Access-Control-Allow-Origin', origin)
   if (ALLOWED_ORIGIN) response.setHeader('Vary', 'Origin')
   response.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,PUT,OPTIONS')
-  response.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
 }
 
 function send(response, status, body) {
@@ -214,16 +230,18 @@ const server = createServer(async (request, response) => {
     return send(response, 200, { table, restaurantId: RESTAURANT_ID })
   }
 
-  // --- Public: sign a table QR token (guarded by API_SECRET when set) ---
+  // --- Owner: sign a table QR token (requires admin bearer token) ---
   if (request.method === 'POST' && (pathname === '/api/tables/token')) {
+    if (!isAuthorized(request)) return send(response, 401, { error: 'Admin authorization required to issue table tokens' })
     const body = parseRequestBody(await readBody(request))
     const table = body && typeof body.table === 'string' && /^\d+$/.test(body.table) ? body.table : null
     if (!table) return send(response, 400, { error: 'table is required and must be numeric' })
     return send(response, 200, { token: signTableToken(table), restaurantId: RESTAURANT_ID })
   }
 
-  // --- Owner: update menu (persists the canonical menu) ---
+  // --- Owner: update menu (persists the canonical menu; requires bearer token) ---
   if (request.method === 'PUT' && pathname === '/api/menu') {
+    if (!isAuthorized(request)) return send(response, 401, { error: 'Admin authorization required to modify the menu' })
     const body = parseRequestBody(await readBody(request))
     if (!Array.isArray(body)) return send(response, 400, { error: 'menu must be an array' })
     const normalized = body.map((item) => {
@@ -294,4 +312,5 @@ server.listen(port, hostname, () => {
   console.log(`Restaurant: ${RESTAURANT_ID} | menu items: ${menu.length} | stored orders: ${orders.length}`)
   if (!ALLOWED_ORIGIN) console.log('CORS: wildcard (development). Set ALLOWED_ORIGIN for production.')
   if (!process.env.QR_TOKEN_SECRET && !process.env.API_SECRET) console.log('WARNING: using a default QR token secret. Set QR_TOKEN_SECRET in production.')
+  if (!ADMIN_SECRET) console.log('WARNING: no ADMIN_TOKEN set — menu edits and QR-token issuance are unauthenticated (dev mode).')
 })

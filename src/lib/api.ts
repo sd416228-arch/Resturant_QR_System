@@ -3,6 +3,16 @@ import type { MenuItem, Order, OrderStatus } from '../types'
 const API_PORT = import.meta.env.VITE_API_PORT || 8787
 const API_URL = `http://${window.location.hostname}:${API_PORT}`
 
+// Owner/admin bearer token for write endpoints (menu edits, QR token issuance).
+// Must match ADMIN_TOKEN on the server; leave empty to stay unauthenticated in dev.
+const ADMIN_TOKEN = import.meta.env.VITE_ADMIN_TOKEN || ''
+
+function adminHeaders(): Record<string, string> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (ADMIN_TOKEN) headers.Authorization = `Bearer ${ADMIN_TOKEN}`
+  return headers
+}
+
 function isMenuItem(value: unknown): value is MenuItem {
   if (!value || typeof value !== 'object') return false
   const item = value as Record<string, unknown>
@@ -91,7 +101,7 @@ export async function updateMenu(items: MenuItem[]): Promise<boolean> {
   try {
     const response = await fetch(`${API_URL}/api/menu`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: adminHeaders(),
       body: JSON.stringify(items),
     })
     return response.ok
@@ -108,7 +118,7 @@ export async function requestTableToken(table: string): Promise<{ token: string;
   try {
     const response = await fetch(`${API_URL}/api/tables/token`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: adminHeaders(),
       body: JSON.stringify({ table }),
     })
     if (!response.ok) return null
