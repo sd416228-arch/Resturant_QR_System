@@ -1,263 +1,219 @@
 [
   {
-    "id": "#30482",
-    "table": "Table 01",
-    "items": [
-      {
-        "item": {
-          "id": 2,
-          "name": "Crispy chicken bao",
-          "description": "Buttermilk chicken, pickled cucumber, sesame aioli.",
-          "price": 12,
-          "category": "Small plates",
-          "image": "https://images.unsplash.com/photo-1563245372-f21724e3856d?w=700&q=80",
-          "available": true,
-          "prep": 15,
-          "tags": [
-            "Popular"
-          ]
-        },
-        "quantity": 2
-      },
-      {
-        "item": {
-          "id": 3,
-          "name": "Miso salmon bowl",
-          "description": "Glazed salmon, jasmine rice, greens, ginger dressing.",
-          "price": 19,
-          "category": "Mains",
-          "image": "https://images.unsplash.com/photo-1547592180-85f173990554?w=700&q=80",
-          "available": true,
-          "prep": 18,
-          "tags": [
-            "Chef pick"
-          ]
-        },
-        "quantity": 1
-      },
-      {
-        "item": {
-          "id": 4,
-          "name": "Charred corn salad",
-          "description": "Avocado, feta, herbs, lime and toasted pepitas.",
-          "price": 11,
-          "category": "Small plates",
-          "image": "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=700&q=80",
-          "available": true,
-          "prep": 8,
-          "tags": [
-            "Vegan"
-          ]
-        },
-        "quantity": 2
-      },
-      {
-        "item": {
-          "id": 5,
-          "name": "Citrus spritz",
-          "description": "Blood orange, rosemary, tonic and sparkling wine.",
-          "price": 9,
-          "category": "Drinks",
-          "image": "https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=700&q=80",
-          "available": true,
-          "prep": 3,
-          "tags": [
-            "New"
-          ]
-        },
-        "quantity": 5
-      }
-    ],
-    "total": 110,
-    "status": "Completed",
-    "time": "5:25 PM"
-  },
-  {
-    "id": "#12519",
-    "table": "Table 01",
-    "items": [
-      {
-        "item": {
-          "id": 1,
-          "name": "Truffle eggs on toast",
-          "description": "Soft scrambled eggs, wild mushrooms, sourdough.",
-          "price": 14,
-          "category": "Breakfast",
-          "image": "https://images.unsplash.com/photo-1525351484163-7529414344d8?w=700&q=80",
-          "available": true,
-          "prep": 12,
-          "tags": [
-            "Popular",
-            "Vegetarian"
-          ]
-        },
-        "quantity": 12
-      }
-    ],
-    "total": 168,
-    "status": "New",
-    "time": "5:25 PM"
-  },
-  {
-    "id": "#07624",
-    "table": "Table 04",
-    "items": [
-      {
-        "item": {
-          "id": 1,
-          "name": "Truffle eggs on toast",
-          "description": "Soft scrambled eggs, wild mushrooms, sourdough.",
-          "price": 14,
-          "category": "Breakfast",
-          "image": "https://images.unsplash.com/photo-1525351484163-7529414344d8?w=700&q=80",
-          "available": true,
-          "prep": 12,
-          "tags": [
-            "Popular",
-            "Vegetarian"
-          ]
-        },
-        "quantity": 1
-      }
-    ],
-    "total": 14,
-    "status": "Ready",
-    "time": "3:50"
-  },
-  {
-    "id": "#37126",
-    "table": "Table 04",
-    "items": [
-      {
-        "item": {
-          "id": 1,
-          "name": "Truffle eggs on toast",
-          "description": "Soft scrambled eggs, wild mushrooms, sourdough.",
-          "price": 14,
-          "category": "Breakfast",
-          "image": "https://images.unsplash.com/photo-1525351484163-7529414344d8?w=700&q=80",
-          "available": true,
-          "prep": 12,
-          "tags": [
-            "Popular",
-            "Vegetarian"
-          ]
-        },
-        "quantity": 1
-      }
-    ],
-    "total": 14,
-    "status": "New",
-    "time": "3:48"
-  },
-  {
-    "id": "#00663",
-    "table": "Table 03",
-    "items": [
-      {
-        "item": {
-          "id": 1,
-          "name": "Truffle eggs on toast",
-          "description": "Soft scrambled eggs, wild mushrooms, sourdough.",
-          "price": 14,
-          "category": "Breakfast",
-          "image": "https://images.unsplash.com/photo-1525351484163-7529414344d8?w=700&q=80",
-          "available": true,
-          "prep": 12,
-          "tags": [
-            "Popular",
-            "Vegetarian"
-          ]
-        },
-        "quantity": 17
-      }
-    ],
-    "total": 238,
-    "status": "New",
-    "time": "3:48 AM"
-  },
-  {
-    "id": "#02408",
-    "table": "Table 03",
-    "items": [
-      {
-        "item": {
-          "id": 2,
-          "name": "Crispy chicken bao",
-          "description": "Buttermilk chicken, pickled cucumber, sesame aioli.",
-          "price": 12,
-          "category": "Small plates",
-          "image": "https://images.unsplash.com/photo-1563245372-f21724e3856d?w=700&q=80",
-          "available": true,
-          "prep": 15,
-          "tags": [
-            "Popular"
-          ]
-        },
-        "quantity": 1
-      }
-    ],
-    "total": 12,
-    "status": "New",
-    "time": "3:43 AM"
-  },
-  {
-    "id": "#42545",
-    "table": "Table 03",
-    "items": [
-      {
-        "item": {
-          "id": 1,
-          "name": "Truffle eggs on toast",
-          "description": "Soft scrambled eggs, wild mushrooms, sourdough.",
-          "price": 14,
-          "category": "Breakfast",
-          "image": "https://images.unsplash.com/photo-1525351484163-7529414344d8?w=700&q=80",
-          "available": true,
-          "prep": 12,
-          "tags": [
-            "Popular",
-            "Vegetarian"
-          ]
-        },
-        "quantity": 1
-      }
-    ],
-    "total": 14,
-    "status": "Completed",
-    "time": "3:42 AM"
-  },
-  {
-    "id": "#1048",
-    "table": "Table 04",
-    "items": [],
-    "total": 37,
-    "status": "Preparing",
-    "time": "12:41 PM"
-  },
-  {
-    "id": "#1047",
+    "id": "#48201",
     "table": "Table 02",
-    "items": [],
-    "total": 28,
+    "tableNumber": "02",
+    "items": [
+      {
+        "itemId": 2,
+        "name": "Crispy chicken bao",
+        "pricePaisa": 120000,
+        "quantity": 2
+      },
+      {
+        "itemId": 5,
+        "name": "Citrus spritz",
+        "pricePaisa": 90000,
+        "quantity": 2
+      }
+    ],
+    "totalPaisa": 420000,
     "status": "New",
-    "time": "12:38 PM",
-    "note": "One egg fully cooked, please."
+    "time": "7:18 PM",
+    "isoTime": "2026-09-29T19:18:00.000Z",
+    "note": "Extra sesame aioli on the side please"
   },
   {
-    "id": "#1046",
-    "table": "Table 11",
-    "items": [],
-    "total": 23,
-    "status": "Ready",
-    "time": "12:30 PM"
+    "id": "#48195",
+    "table": "Table 04",
+    "tableNumber": "04",
+    "items": [
+      {
+        "itemId": 3,
+        "name": "Miso salmon bowl",
+        "pricePaisa": 190000,
+        "quantity": 1
+      },
+      {
+        "itemId": 4,
+        "name": "Charred corn salad",
+        "pricePaisa": 110000,
+        "quantity": 1
+      }
+    ],
+    "totalPaisa": 300000,
+    "status": "New",
+    "time": "7:12 PM",
+    "isoTime": "2026-09-29T19:12:00.000Z",
+    "note": "Gluten sensitive"
   },
   {
-    "id": "#1045",
+    "id": "#48182",
+    "table": "Table 01",
+    "tableNumber": "01",
+    "items": [
+      {
+        "itemId": 1,
+        "name": "Truffle eggs on toast",
+        "pricePaisa": 140000,
+        "quantity": 2
+      },
+      {
+        "itemId": 7,
+        "name": "Wild Berry French Toast",
+        "pricePaisa": 130000,
+        "quantity": 1
+      },
+      {
+        "itemId": 10,
+        "name": "Cold Brew Tonic",
+        "pricePaisa": 65000,
+        "quantity": 2
+      }
+    ],
+    "totalPaisa": 540000,
+    "status": "Preparing",
+    "time": "7:02 PM",
+    "isoTime": "2026-09-29T19:02:00.000Z",
+    "note": "Eggs soft scrambled"
+  },
+  {
+    "id": "#48170",
     "table": "Table 07",
-    "items": [],
-    "total": 38,
+    "tableNumber": "07",
+    "items": [
+      {
+        "itemId": 6,
+        "name": "Wood-Fired Margherita",
+        "pricePaisa": 165000,
+        "quantity": 1
+      },
+      {
+        "itemId": 8,
+        "name": "Smoked Wagyu Burger",
+        "pricePaisa": 220000,
+        "quantity": 1
+      },
+      {
+        "itemId": 5,
+        "name": "Citrus spritz",
+        "pricePaisa": 90000,
+        "quantity": 2
+      }
+    ],
+    "totalPaisa": 565000,
+    "status": "Preparing",
+    "time": "6:48 PM",
+    "isoTime": "2026-09-29T18:48:00.000Z"
+  },
+  {
+    "id": "#48155",
+    "table": "Table 03",
+    "tableNumber": "03",
+    "items": [
+      {
+        "itemId": 2,
+        "name": "Crispy chicken bao",
+        "pricePaisa": 120000,
+        "quantity": 3
+      },
+      {
+        "itemId": 9,
+        "name": "Matcha Basque Cheesecake",
+        "pricePaisa": 95000,
+        "quantity": 2
+      }
+    ],
+    "totalPaisa": 550000,
+    "status": "Ready",
+    "time": "6:35 PM",
+    "isoTime": "2026-09-29T18:35:00.000Z"
+  },
+  {
+    "id": "#48142",
+    "table": "Table 06",
+    "tableNumber": "06",
+    "items": [
+      {
+        "itemId": 3,
+        "name": "Miso salmon bowl",
+        "pricePaisa": 190000,
+        "quantity": 2
+      },
+      {
+        "itemId": 5,
+        "name": "Citrus spritz",
+        "pricePaisa": 90000,
+        "quantity": 2
+      }
+    ],
+    "totalPaisa": 560000,
     "status": "Completed",
-    "time": "12:15 PM"
+    "time": "6:10 PM",
+    "isoTime": "2026-09-29T18:10:00.000Z"
+  },
+  {
+    "id": "#48130",
+    "table": "Table 05",
+    "tableNumber": "05",
+    "items": [
+      {
+        "itemId": 8,
+        "name": "Smoked Wagyu Burger",
+        "pricePaisa": 220000,
+        "quantity": 2
+      },
+      {
+        "itemId": 10,
+        "name": "Cold Brew Tonic",
+        "pricePaisa": 65000,
+        "quantity": 2
+      }
+    ],
+    "totalPaisa": 570000,
+    "status": "Completed",
+    "time": "5:42 PM",
+    "isoTime": "2026-09-29T17:42:00.000Z"
+  },
+  {
+    "id": "#48118",
+    "table": "Table 08",
+    "tableNumber": "08",
+    "items": [
+      {
+        "itemId": 1,
+        "name": "Truffle eggs on toast",
+        "pricePaisa": 140000,
+        "quantity": 1
+      },
+      {
+        "itemId": 4,
+        "name": "Charred corn salad",
+        "pricePaisa": 110000,
+        "quantity": 1
+      }
+    ],
+    "totalPaisa": 250000,
+    "status": "Completed",
+    "time": "5:15 PM",
+    "isoTime": "2026-09-29T17:15:00.000Z"
+  },
+  {
+    "id": "#48102",
+    "table": "Table 02",
+    "tableNumber": "02",
+    "items": [
+      {
+        "itemId": 6,
+        "name": "Wood-Fired Margherita",
+        "pricePaisa": 165000,
+        "quantity": 1
+      }
+    ],
+    "totalPaisa": 165000,
+    "status": "Cancelled",
+    "time": "4:50 PM",
+    "isoTime": "2026-09-29T16:50:00.000Z",
+    "note": "Guest had to leave early"
   }
 ]

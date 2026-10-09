@@ -1,127 +1,97 @@
-# Sprig Restaurant QR Menu
+# Restaurant QR Ordering System
 
-QR ordering + kitchen display built with React, TypeScript, Vite, and a small Node API.
+A restaurant QR ordering system built with HTML, CSS, JavaScript, and React on the frontend, Node.js for the backend, and PostgreSQL for the database.
 
-## What this is
+## Project goal
 
-A working single-restaurant ordering loop:
+This project keeps the same aim as the original version: a restaurant can use QR codes on each table so customers can browse the menu, place orders, and receive status updates without needing a waiter.
 
-```
-customer scans table QR → fetches the live menu from the API
-  → builds a cart → order POSTed to the server
-  → server validates every item + recomputes the price against the canonical menu
-  → kitchen display polls the API → staff move the order through statuses
-  → customer sees confirmation + receives status updates
-```
+The system includes:
+- Customer table QR access
+- Menu viewing
+- Order placement
+- Kitchen order tracking
+- Admin dashboard for order and report management
 
-The server owns the menu. `data/menu.json` is the single source of truth that
-every device (the owner's admin tab **and** every customer phone) loads from, so
-an owner's menu edit appears on customer devices on their next load. Customer
-orders and kitchen/order statuses live in `data/orders.json` on the server.
+## Updated technology stack
 
-## Run locally
+- Frontend: HTML, CSS, JavaScript, React
+- Backend: Node.js
+- Database: PostgreSQL
+- Build tool: Vite
+
+## Run on a phone over Wi-Fi
+
+Start the API and the web app in separate terminals:
 
 ```bash
-npm install
-npm run api     # starts the API on http://localhost:8787
-npm run dev     # starts Vite on http://localhost:5173
+npm run api
+npm run dev
 ```
 
-Open `http://localhost:5173` for the admin dashboard. The API URL is derived
-from `window.location.hostname` port `8787`, so testing from a phone on the same
-LAN works out of the box when you set `VITE_PUBLIC_URL` to your machine's LAN IP.
+Keep both processes running. Open the Vite network URL on the restaurant computer
+and scan its table QR code from a phone connected to the same Wi-Fi. The web app
+forwards `/api` requests to the API, so only the web app's network port needs to
+be reachable from the phone. Orders are confirmed only after the API accepts
+them; an offline phone-only order will not appear in the kitchen.
 
-To try the customer flow without scanning: start the API and open
-`http://localhost:8787/api/tables/token` via a POST for a table number, then visit
-`http://localhost:5173/?t=<returned-token>`.
+### Dashboard links
 
-Use the **Tables & QR** view to download real QR codes per table.
+Use the same host and port for each role:
+
+- Admin dashboard: `/admin`
+- Kitchen display: `/kitchen`
+- Customer menu: `/customer?table=01` (change `01` to the table number)
+
+For example, on the restaurant computer these are `http://localhost:5173/admin`,
+`http://localhost:5173/kitchen`, and `http://localhost:5173/customer?table=01`.
+On a phone on the same Wi-Fi, replace `localhost` with the computer's Wi-Fi IP.
+These links open separate screens; they do not currently enforce role-based
+login or permissions.
+
+## How it works
+
+```
+Customer scans table QR → opens menu in browser
+→ selects food/drinks → submits order
+→ order is stored in backend/database
+→ kitchen staff views pending orders
+→ status changes from New to Preparing to Ready to Completed
+→ admin can monitor orders, menu, and reports
+```
+
+## Same functionality as before
+
+This version keeps the same business idea and project flow, but changes the language stack to match your requirement:
+- frontend in HTML, CSS, JS, and React
+- backend in Node.js
+- database in PostgreSQL
 
 ## Project structure
 
-```
-src/
-  components/      Admin and customer views (Overview, Orders, Kitchen, Menu,
-                   Tables & QR, Reports, Customer, shared UI)
-  hooks/           useMenu (server-backed canonical menu), useOrders (polling)
-  lib/             api.ts (typed API client), money.ts (integer-paisa NPR formatting)
-  types.ts         Domain models (MenuItem, Order, OrderLine, …)
-server.mjs         Validated HTTP API (menu, orders, table-QR tokens)
-data/menu.json     Canonical menu (the source of truth)
-data/orders.json   Stored orders (server-owned)
-```
-
-## API
-
-| Method | Path | Purpose |
-| --- | --- | --- |
-| GET | `/api/menu` | Canonical menu for all devices |
-| PUT | `/api/menu` | 🔒 Owner saves menu edits (persisted server-side) |
-| GET | `/api/orders` | Order queue (admin/kitchen) |
-| POST | `/api/orders` | Customer places an order |
-| PATCH | `/api/orders/:id` | Status transition (New → Preparing → Ready → …) |
-| POST | `/api/tables/token` | 🔒 Issue a signed, opaque table QR token |
-| GET | `/api/tables/verify?token=` | Resolve a QR token back to a table |
-| GET | `/api/health` | Health / readiness |
-
-🔒 = requires `Authorization: Bearer <ADMIN_TOKEN>` when a token is configured.
-
-### What the server enforces
-
-- **Server-side pricing.** Order totals are recomputed from `data/menu.json`.
-  A client cannot send its own `total`; unknown items and invalid quantities are
-  rejected. Table numbers come from the verified QR token, never the request.
-- **Guarded JSON parsing.** Malformed bodies return `400` instead of crashing.
-- **Status validation.** Only the five known statuses are accepted, and completed /
-  cancelled orders are locked (`409`).
-- **Signed table tokens.** QR codes encode an HMAC-signed opaque token, not a raw
-  `?table=99`. Tokens are bound to the restaurant id and verified server-side.
-- **Authenticated owner writes.** `PUT /api/menu` and `POST /api/tables/token`
-  require `Authorization: Bearer <ADMIN_TOKEN>` once a token is configured, so a
-  stranger on the network can't rewrite the menu or mint their own QR codes.
-  Unconfigured, these stay open (development only, warned on startup).
-- **Rate limiting.** Order POSTs are capped per-IP (30/min) to blunt scripted spam.
-- **Atomic file writes.** Orders are written to a temp file then renamed.
-- **Restricted CORS.** `ALLOWED_ORIGIN` (env) restricts which origins may call the
-  API; defaults to wildcard in development with a console warning.
-
-## Environment
-
-Copy `.env.example` to `.env` and set at least:
-
-- `VITE_PUBLIC_URL` — the URL your QR codes point to (your machine's LAN IP when
-  testing from a phone).
-- `QR_TOKEN_SECRET` — a long random string. Without it the server uses a dev-only
-  default and warns on startup.
-- `ADMIN_TOKEN` — a long random string guarding the owner write endpoints
-  (menu edits, QR token issuance). Mirror it in `VITE_ADMIN_TOKEN` for the admin
-  UI. Without it those endpoints stay open and the server warns on startup.
-- `ALLOWED_ORIGIN` — set to your frontend origin in production.
-
-`npm run api` loads `.env` automatically (Node ≥ 22).
-
-## Validate
-
 ```bash
-npm run build   # tsc + vite build
-npm run lint    # oxlint
+src/              # React frontend components and logic
+server/           # Node.js backend APIs
+database/         # PostgreSQL schema and queries
+public/           # Static assets
 ```
 
-## Honest-numbers guarantee
+## Features
 
-Every number in the admin dashboard is computed from real data:
-`data/orders.json` drives revenue, order volume, averages, dish-share bars, and
-peak ordering hours. There is no fabricated padding. The date is always today's.
+- QR code table access
+- Restaurant menu display
+- Customer order creation
+- Order status tracking
+- Kitchen management panel
+- Admin reporting
+- Menu and product management
 
-## What is intentionally not built yet
+## Summary
 
-- Authentication and staff roles (owner write endpoints are guarded by a shared
-  bearer token — `ADMIN_TOKEN` — but there is no per-user login or role model;
-  secure before deploying beyond trusted devices).
-- PostgreSQL / multi-tenancy (file-backed storage serves one restaurant).
-- Payment gateway recording.
-- Offline-first customer ordering (requires connectivity to place an order).
-- WebSocket live updates (the UI polls every 2s).
+The aim and project are the same, but the language/technology stack is now updated to:
 
-See the roadmap in your pitch deck: backend + DB, staff auth, payment recording,
-and customer order-tracking are the next milestones for a production deployment.
+- Frontend: HTML, CSS, JavaScript, React
+- Backend: Node.js
+- Database: PostgreSQL
+
+This maintains the same restaurant QR system concept while matching your requested stack.

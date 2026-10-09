@@ -1,19 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Order, OrderStatus } from '../types'
-import { fetchOrders, updateOrderStatus } from '../lib/api'
+import { fetchOrders, getStoredOrders, updateOrderStatus } from '../lib/api'
 
-const POLL_MS = 2000
+const POLL_MS = 3000
 
 export function useOrders(active = true) {
-  const [orders, setOrders] = useState<Order[]>([])
+  const [orders, setOrders] = useState(() => getStoredOrders())
   const [offline, setOffline] = useState(false)
   const timer = useRef<number | null>(null)
 
   const refresh = useCallback(() => {
-    fetchOrders().then((data) => {
-      setOrders(data)
-      setOffline(!data.length)
-    })
+    fetchOrders()
+      .then((data) => {
+        if (data && data.length > 0) {
+          setOrders(data)
+        }
+        setOffline(false)
+      })
+      .catch(() => {
+        setOffline(true)
+      })
   }, [])
 
   useEffect(() => {
@@ -26,7 +31,7 @@ export function useOrders(active = true) {
   }, [active, refresh])
 
   const changeStatus = useCallback(
-    async (id: string, status: OrderStatus) => {
+    async (id, status) => {
       const ok = await updateOrderStatus(id, status)
       if (ok) {
         setOrders((current) => current.map((o) => (o.id === id ? { ...o, status } : o)))

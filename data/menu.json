@@ -2,7 +2,7 @@
   {
     "id": 1,
     "name": "Truffle eggs on toast",
-    "description": "Soft scrambled eggs, wild mushrooms, sourdough.",
+    "description": "Soft scrambled organic eggs, shaved black truffle, wild mushrooms on toasted artisanal sourdough.",
     "pricePaisa": 140000,
     "category": "Breakfast",
     "image": "https://images.unsplash.com/photo-1525351484163-7529414344d8?w=700&q=80",
@@ -13,45 +13,100 @@
   {
     "id": 2,
     "name": "Crispy chicken bao",
-    "description": "Buttermilk chicken, pickled cucumber, sesame aioli.",
+    "description": "Twice-fried buttermilk chicken, pickled cucumber, scallions, togarashi sesame aioli in steamed bao buns.",
     "pricePaisa": 120000,
     "category": "Small plates",
     "image": "https://images.unsplash.com/photo-1563245372-f21724e3856d?w=700&q=80",
     "available": true,
     "prep": 15,
-    "tags": ["Popular"]
+    "tags": ["Popular", "Best Seller"]
   },
   {
     "id": 3,
     "name": "Miso salmon bowl",
-    "description": "Glazed salmon, jasmine rice, greens, ginger dressing.",
+    "description": "Pan-seared Atlantic salmon glazed in red miso, warm jasmine rice, edamame, pickled ginger and sesame dressing.",
     "pricePaisa": 190000,
     "category": "Mains",
     "image": "https://images.unsplash.com/photo-1547592180-85f173990554?w=700&q=80",
     "available": true,
     "prep": 18,
-    "tags": ["Chef pick"]
+    "tags": ["Chef pick", "Healthy"]
   },
   {
     "id": 4,
     "name": "Charred corn salad",
-    "description": "Avocado, feta, herbs, lime and toasted pepitas.",
+    "description": "Fire-roasted sweet corn, smashed avocado, Danish feta, cilantro, lime vinaigrette and toasted pepitas.",
     "pricePaisa": 110000,
     "category": "Small plates",
     "image": "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=700&q=80",
     "available": true,
     "prep": 8,
-    "tags": ["Vegan"]
+    "tags": ["Vegan", "Gluten-Free"]
   },
   {
     "id": 5,
     "name": "Citrus spritz",
-    "description": "Blood orange, rosemary, tonic and sparkling wine.",
+    "description": "Blood orange reduction, fresh rosemary sprig, artisan tonic and sparkling prosecco over hand-carved ice.",
     "pricePaisa": 90000,
     "category": "Drinks",
     "image": "https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=700&q=80",
     "available": true,
     "prep": 3,
-    "tags": ["New"]
+    "tags": ["Signature", "Cocktail"]
+  },
+  {
+    "id": 6,
+    "name": "Wood-Fired Margherita",
+    "description": "San Marzano tomatoes, fresh buffalo mozzarella, fragrant sweet basil, extra virgin olive oil on fermented crust.",
+    "pricePaisa": 165000,
+    "category": "Mains",
+    "image": "https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=700&q=80",
+    "available": true,
+    "prep": 14,
+    "tags": ["Vegetarian", "Classic"]
+  },
+  {
+    "id": 7,
+    "name": "Wild Berry French Toast",
+    "description": "Thick-cut brioche soaked in vanilla custard, topped with organic macerated berries, whipped mascarpone and maple.",
+    "pricePaisa": 130000,
+    "category": "Breakfast",
+    "image": "https://images.unsplash.com/photo-1484723091739-30a097e8f929?w=700&q=80",
+    "available": true,
+    "prep": 10,
+    "tags": ["Sweet", "Brunch"]
+  },
+  {
+    "id": 8,
+    "name": "Smoked Wagyu Burger",
+    "description": "Custom grind Wagyu beef patty, aged smoked cheddar, caramelized onion jam, garlic truffle mayo, brioche bun.",
+    "pricePaisa": 220000,
+    "category": "Mains",
+    "image": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=700&q=80",
+    "available": true,
+    "prep": 16,
+    "tags": ["Chef pick", "Bestseller"]
+  },
+  {
+    "id": 9,
+    "name": "Matcha Basque Cheesecake",
+    "description": "Creamy caramelized Uji matcha cheesecake with a molten center and black sesame brittle.",
+    "pricePaisa": 95000,
+    "category": "Desserts",
+    "image": "https://images.unsplash.com/photo-1533134242443-d4fd215305ad?w=700&q=80",
+    "available": true,
+    "prep": 5,
+    "tags": ["Dessert", "Housemade"]
+  },
+  {
+    "id": 10,
+    "name": "Cold Brew Tonic",
+    "description": "Single-origin slow-steeped cold brew coffee, elderflower tonic water, expressed grapefruit peel.",
+    "pricePaisa": 65000,
+    "category": "Drinks",
+    "image": "https://images.unsplash.com/photo-1517701604599-bb29b565090c?w=700&q=80",
+    "available": true,
+    "prep": 3,
+    "tags": ["Non-Alcoholic", "Craft"]
   }
 ]

@@ -1,17 +1,21 @@
-export type View = 'Overview' | 'Orders' | 'Menu' | 'Tables & QR' | 'Kitchen' | 'Reports'
-
-const NAV_ICONS = ['⌂', '▤', '◈', '⌗', '◉', '◒'] as const
+const NAV_ICONS = ['⌂', '▤', '◈', '⌗', '◉', '◒']
 
 export default function Sidebar({
   view,
   onNavigate,
   pendingCount,
-}: {
-  view: View
-  onNavigate: (view: View) => void
-  pendingCount: number
 }) {
-  const entries: View[] = ['Overview', 'Orders', 'Menu', 'Tables & QR', 'Kitchen', 'Reports']
+  const entries: ('Overview' | 'Orders' | 'Menu' | 'Tables & QR' | 'Kitchen' | 'Reports')[] = [
+    'Overview',
+    'Orders',
+    'Menu',
+    'Tables & QR',
+    'Kitchen',
+    'Reports',
+  ]
+
+  const restaurantName = localStorage.getItem('sprig_restaurant_name') || 'Moss & Ember'
+
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -21,7 +25,7 @@ export default function Sidebar({
       <div className="restaurant-switch">
         <span className="avatar">M</span>
         <span>
-          <b>Moss &amp; Ember</b>
+          <b>{restaurantName}</b>
           <small>Restaurant account</small>
         </span>
         <span className="chevron">⌄</span>
@@ -32,6 +36,7 @@ export default function Sidebar({
             className={view === entry ? 'nav-item active' : 'nav-item'}
             onClick={() => onNavigate(entry)}
             key={entry}
+            type="button"
           >
             <span className="nav-icon">{NAV_ICONS[index]}</span>
             {entry}
@@ -40,7 +45,11 @@ export default function Sidebar({
         ))}
       </nav>
       <div className="sidebar-bottom">
-        <button className="nav-item" aria-disabled>
+        <button
+          className={view === 'Settings' ? 'nav-item active' : 'nav-item'}
+          onClick={() => onNavigate('Settings')}
+          type="button"
+        >
           <span className="nav-icon">⚙</span>Settings
         </button>
         <div className="profile">

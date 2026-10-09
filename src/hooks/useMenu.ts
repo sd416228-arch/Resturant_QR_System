@@ -1,21 +1,31 @@
 import { useEffect, useRef, useState } from 'react'
-import type { MenuItem } from '../types'
 import { fetchMenu, updateMenu } from '../lib/api'
+import { DEFAULT_MENU } from '../lib/mockData'
 
-// Single source of truth is the server-side canonical menu. Every device
-// (owner tablet AND customer phone) loads from /api/menu, so an owner's edit
-// on one device is visible on every other device immediately on next load.
 export function useMenu() {
-  const [items, setItems] = useState<MenuItem[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [items, setItems] = useState(() => {
+    try {
+      const raw = localStorage.getItem('sprig_restaurant_menu')
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed
+      }
+    } catch {
+      // ignore
+    }
+    return DEFAULT_MENU
+  })
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
   const [saving, setSaving] = useState(false)
   const firstRun = useRef(true)
 
   const reload = async () => {
     try {
       const menu = await fetchMenu()
-      setItems(menu)
+      if (menu && menu.length > 0) {
+        setItems(menu)
+      }
       setError(null)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load the menu')
@@ -31,8 +41,8 @@ export function useMenu() {
     }
   }, [])
 
-  // Persist owner edits to the server so all devices stay in sync.
-  const save = async (next: MenuItem[]) => {
+  // Persist owner edits to server & local storage
+  const save = async (next) => {
     setItems(next)
     setSaving(true)
     try {

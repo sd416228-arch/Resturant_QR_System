@@ -1,8 +1,22 @@
 import { createServer } from 'node:http'
 import { createHmac, timingSafeEqual } from 'node:crypto'
-import { existsSync, readFileSync, writeFileSync, renameSync } from 'node:fs'
+import { createReadStream, existsSync, readFileSync, statSync, writeFileSync, renameSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { dirname, join } from 'node:path'
+import { dirname, extname, join, normalize, resolve, sep } from 'node:path'
+import os from 'node:os'
+
+// Best-effort LAN IPv4 so QR codes point at this machine, not a stale guess.
+function detectLanIp() {
+  const nets = os.networkInterfaces()
+  for (const name of Object.keys(nets)) {
+    if (/vmware|vethernet|wsl|loopback|bluetooth|hyper-v|teredo|isatap|docker/i.test(name)) continue
+    for (const net of nets[name] || []) {
+      const family = String(net.family)
+      if ((family === 'IPv4' || family === '4') && !net.internal) return net.address
+    }
+  }
+  return null
+}
 
 const root = dirname(fileURLToPath(import.meta.url))
 const port = Number(process.env.API_PORT || 8787)
@@ -10,6 +24,7 @@ const hostname = process.env.API_HOST || '0.0.0.0'
 const dataDir = join(root, 'data')
 const ordersFile = join(dataDir, 'orders.json')
 const menuFile = join(dataDir, 'menu.json')
+const distDir = resolve(root, 'dist')
 
 // --- Storage ---------------------------------------------------------------
 
@@ -130,8 +145,13 @@ function normalizeOrder(payload, table) {
   const validation = validateOrderItems(payload && payload.items)
   if (!validation.ok) return { error: validation.error, status: 400 }
 
-  // Table comes from the verified token (server-side), never the request body.
-  const safeTable = verifyTableToken(payload.tableToken) || table || '0'
+  // Table comes from the verified token (server-side); otherwise a sanitized
+  // client-picked table number (plain /customer/dashboard link with picker).
+  const pickedTable =
+    typeof payload.tableNumber === 'string' && /^[\w-]{1,8}$/.test(payload.tableNumber)
+      ? payload.tableNumber
+      : ''
+  const safeTable = verifyTableToken(payload.tableToken) || pickedTable || table || '0'
 
   const id = `#${String(Date.now()).slice(-5)}`
   const now = new Date()
@@ -166,6 +186,60 @@ function send(response, status, body) {
   const encoded = JSON.stringify(body)
   response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' })
   response.end(encoded)
+}
+
+// --- Static frontend -----------------------------------------------------------
+// Serving the built bundle from the same process as the API gives the app and
+// its API a single origin: no CORS, no port guessing, and one URL for the QR
+// codes. That is what lets the whole thing sit behind one TLS terminator.
+
+const MIME_TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.ico': 'image/x-icon',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.webmanifest': 'application/manifest+json',
+}
+
+const hasBuild = existsSync(join(distDir, 'index.html'))
+
+// Resolve a URL path to a file inside dist/, refusing anything that escapes it.
+function resolveStaticPath(pathname) {
+  const decoded = decodeURIComponent(pathname)
+  const candidate = resolve(distDir, `.${normalize(decoded)}`)
+  if (candidate !== distDir && !candidate.startsWith(distDir + sep)) return null
+  if (existsSync(candidate) && statSync(candidate).isFile()) return candidate
+  return null
+}
+
+function serveStatic(request, response, pathname) {
+  // Hashed asset filenames are safe to cache hard; index.html must not be.
+  const file = resolveStaticPath(pathname) || resolveStaticPath('/index.html')
+  if (!file) return false
+  const isIndex = file === join(distDir, 'index.html')
+  const type = MIME_TYPES[extname(file).toLowerCase()] || 'application/octet-stream'
+  const etag = `W/"${file.length}-${file.split(sep).pop()}"`
+  if (request.headers['if-none-match'] === etag) {
+    response.writeHead(304, { ETag: etag })
+    response.end()
+    return true
+  }
+  response.writeHead(200, {
+    'Content-Type': type,
+    ETag: etag,
+    'Cache-Control': isIndex ? 'no-cache' : 'public, max-age=31536000, immutable',
+  })
+  createReadStream(file).pipe(response)
+  return true
 }
 
 // Basic in-memory rate limiter for public order endpoints (per IP).
@@ -219,6 +293,7 @@ const server = createServer(async (request, response) => {
 
   // --- Public: canonical menu (single source of truth for all devices) ---
   if (request.method === 'GET' && (pathname === '/api/menu' || pathname === '/api/menu/')) {
+    menu = readJsonFile(menuFile, menu)
     return send(response, 200, menu)
   }
 
@@ -296,12 +371,31 @@ const server = createServer(async (request, response) => {
 
   // --- Orders: GET ---
   if (request.method === 'GET' && pathname === '/api/orders') {
+    orders = readJsonFile(ordersFile, orders)
     return send(response, 200, orders)
   }
 
   // --- Health check ---
   if (request.method === 'GET' && pathname === '/api/health') {
+    orders = readJsonFile(ordersFile, orders)
     return send(response, 200, { ok: true, restaurantId: RESTAURANT_ID, orders: orders.length })
+  }
+
+  // --- LAN IP for QR base URL auto-detection ---
+  if (request.method === 'GET' && pathname === '/api/lan-info') {
+    return send(response, 200, { lanIp: detectLanIp() })
+  }
+
+  // --- Static frontend (SPA fallback) ---
+  // Any non-API GET resolves to a built asset, else to index.html so the
+  // client-side router can handle deep links such as /?t=<token>.
+  if (request.method === 'GET' && !pathname.startsWith('/api/')) {
+    if (!hasBuild) {
+      return send(response, 503, {
+        error: 'Frontend not built. Run `npm run build`, or use `npm run dev` for the Vite dev server.',
+      })
+    }
+    if (serveStatic(request, response, pathname)) return
   }
 
   send(response, 404, { error: 'Not found' })
@@ -310,6 +404,11 @@ const server = createServer(async (request, response) => {
 server.listen(port, hostname, () => {
   console.log(`Sprig API listening on http://${hostname}:${port}`)
   console.log(`Restaurant: ${RESTAURANT_ID} | menu items: ${menu.length} | stored orders: ${orders.length}`)
+  if (hasBuild) {
+    console.log(`Frontend: serving ${distDir} on the same origin (single-URL mode)`)
+  } else {
+    console.log('Frontend: no dist/ build found — API only. Run `npm run build` to serve the app here.')
+  }
   if (!ALLOWED_ORIGIN) console.log('CORS: wildcard (development). Set ALLOWED_ORIGIN for production.')
   if (!process.env.QR_TOKEN_SECRET && !process.env.API_SECRET) console.log('WARNING: using a default QR token secret. Set QR_TOKEN_SECRET in production.')
   if (!ADMIN_SECRET) console.log('WARNING: no ADMIN_TOKEN set — menu edits and QR-token issuance are unauthenticated (dev mode).')

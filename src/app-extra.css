@@ -46,3 +46,53 @@
 .status-step i{width:14px;height:14px;border-radius:50%;background:var(--line);display:inline-block;flex-shrink:0}
 .status-step.active{color:var(--green);font-weight:700}
 .status-step.active i{background:var(--rust)}
+
+/* --- Print Media Formatting --- */
+@media print {
+  /* Hide administrative chrome during printing */
+  .sidebar,
+  .topbar,
+  .api-banner,
+  .demo-return-bar,
+  .filter-tabs,
+  .quick-add,
+  .toast,
+  .page-title button,
+  .primary-button,
+  .secondary-button,
+  .qr-download,
+  .add-admin-item,
+  .status-select,
+  .icon-button {
+    display: none !important;
+  }
+
+  body,
+  .app-shell,
+  .main-content,
+  .page,
+  .customer-page {
+    background: #fff !important;
+    color: #000 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    min-height: auto !important;
+  }
+
+  /* When printing a specific placard */
+  #printable-placard {
+    display: flex !important;
+    border: 3px solid #1c342b !important;
+    border-radius: 12px !important;
+    padding: 3rem 2rem !important;
+    margin: 2rem auto !important;
+    max-width: 400px !important;
+    box-shadow: none !important;
+    page-break-inside: avoid !important;
+  }
+
+  .panel {
+    box-shadow: none !important;
+    border: 1px solid #ccc !important;
+  }
+}

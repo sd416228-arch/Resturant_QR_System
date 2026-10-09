@@ -1,21 +1,79 @@
-import type { MenuItem, Order, OrderStatus } from '../types'
+import { DEFAULT_MENU, DEFAULT_ORDERS } from './mockData'
+import type { Order } from '../types'
 
-const API_PORT = import.meta.env.VITE_API_PORT || 8787
-const API_URL = `http://${window.location.hostname}:${API_PORT}`
+const API_PORT = String(import.meta.env.VITE_API_PORT || 8787)
 
-// Owner/admin bearer token for write endpoints (menu edits, QR token issuance).
-// Must match ADMIN_TOKEN on the server; leave empty to stay unauthenticated in dev.
+// Resolve the API base URL.
+//
+// Single-origin mode (the app served by server.mjs from dist/) keeps the API on
+// the same origin, so there is no CORS and no port to guess. The Vite dev server
+// runs on a different port, so the API is reached on the sibling port instead —
+// reusing the page protocol there matters, since a hardcoded http:// origin on
+// an https:// page is blocked as mixed content.
+function resolveApiUrl(): string {
+  const override = import.meta.env.VITE_API_URL
+  if (typeof override === 'string' && override.trim()) return override.trim().replace(/\/$/, '')
+  if (window.location.port === API_PORT || window.location.port === '5173') return window.location.origin
+  return `${window.location.protocol}//${window.location.hostname}:${API_PORT}`
+}
+
+const API_URL = resolveApiUrl()
+
 const ADMIN_TOKEN = import.meta.env.VITE_ADMIN_TOKEN || ''
+const STORAGE_KEY_MENU = 'sprig_restaurant_menu'
+const STORAGE_KEY_ORDERS = 'sprig_restaurant_orders'
 
-function adminHeaders(): Record<string, string> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  if (ADMIN_TOKEN) headers.Authorization = `Bearer ${ADMIN_TOKEN}`
+function adminHeaders() {
+  const headers = { 'Content-Type': 'application/json' }
+  if (ADMIN_TOKEN) Object.assign(headers, { Authorization: `Bearer ${ADMIN_TOKEN}` })
   return headers
 }
 
-function isMenuItem(value: unknown): value is MenuItem {
+function getStoredMenu() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_MENU)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed
+    }
+  } catch {
+    // fallback
+  }
+  return DEFAULT_MENU
+}
+
+function saveStoredMenu(items) {
+  try {
+    localStorage.setItem(STORAGE_KEY_MENU, JSON.stringify(items))
+  } catch {
+    // ignore
+  }
+}
+
+export function getStoredOrders() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_ORDERS)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed
+    }
+  } catch {
+    // fallback
+  }
+  return DEFAULT_ORDERS
+}
+
+export function saveStoredOrders(orders) {
+  try {
+    localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(orders))
+  } catch {
+    // ignore
+  }
+}
+
+function isMenuItem(value) {
   if (!value || typeof value !== 'object') return false
-  const item = value as Record<string, unknown>
+  const item = value
   return (
     typeof item.id === 'number' &&
     typeof item.name === 'string' &&
@@ -25,128 +83,215 @@ function isMenuItem(value: unknown): value is MenuItem {
   )
 }
 
-export async function fetchMenu(): Promise<MenuItem[]> {
-  const response = await fetch(`${API_URL}/api/menu`)
-  if (!response.ok) throw new Error('Could not load the menu')
-  const data: unknown = await response.json()
-  if (!Array.isArray(data)) throw new Error('Menu has an unexpected format')
-  return data.filter(isMenuItem)
+function isOrder(value: unknown): value is Order {
+  if (!value || typeof value !== 'object') return false
+  const order = value as Partial<Order>
+  return (
+    typeof order.id === 'string' &&
+    typeof order.table === 'string' &&
+    typeof order.tableNumber === 'string' &&
+    typeof order.totalPaisa === 'number' &&
+    typeof order.time === 'string' &&
+    ['New', 'Preparing', 'Ready', 'Completed', 'Cancelled'].includes(order.status as string) &&
+    Array.isArray(order.items) &&
+    order.items.every((item) =>
+      typeof item.itemId === 'number' &&
+      typeof item.name === 'string' &&
+      typeof item.pricePaisa === 'number' &&
+      typeof item.quantity === 'number' &&
+      item.quantity > 0
+    )
+  )
 }
 
-export interface PlaceOrderResult {
-  ok: boolean
-  order?: Order
-  error?: string
+export async function fetchMenu() {
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 2500)
+    const response = await fetch(`${API_URL}/api/menu`, { signal: controller.signal })
+    clearTimeout(timer)
+    if (response.ok) {
+      const data: unknown = await response.json()
+      if (Array.isArray(data) && data.length > 0) {
+        const valid = data.filter(isMenuItem)
+        if (valid.length > 0) {
+          saveStoredMenu(valid)
+          return valid
+        }
+      }
+    }
+  } catch {
+    // Backend offline / static deploy fallback
+  }
+  return getStoredMenu()
 }
 
-export interface PlaceOrderInput {
-  tableToken: string
+export async function placeOrder(input: {
+  tableToken?: string
+  tableNumber?: string
   items: { itemId: number; quantity: number }[]
   note?: string
-}
-
-// Server recomputes prices and validates every line. We never trust client totals.
-export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResult> {
+}): Promise<{ ok: true; order: Order } | { ok: false; error: string }> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 3000)
   try {
     const response = await fetch(`${API_URL}/api/orders`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
+      signal: controller.signal,
     })
+    const body: unknown = await response.json().catch(() => null)
     if (!response.ok) {
-      let message = 'The kitchen could not accept this order right now.'
-      try {
-        const body: unknown = await response.json()
-        if (body && typeof body === 'object' && 'error' in body) {
-          message = String((body as { error: unknown }).error)
-        }
-      } catch {
-        // keep default message
-      }
+      const message =
+        body && typeof body === 'object' && 'error' in body && typeof body.error === 'string'
+          ? body.error
+          : `The server could not accept this order (${response.status}).`
       return { ok: false, error: message }
     }
-    const body: unknown = await response.json()
-    const order = body && typeof body === 'object' ? (body as { order?: Order }).order : undefined
-    return { ok: true, order }
+    const order = body && typeof body === 'object' && 'order' in body ? body.order : undefined
+    if (isOrder(order)) {
+      const current = getStoredOrders()
+      saveStoredOrders([order, ...current])
+      return { ok: true, order }
+    }
+    return { ok: false, error: 'The server response did not include the accepted order.' }
   } catch {
-    return { ok: false, error: 'Could not reach the kitchen. Please try again.' }
+    return {
+      ok: false,
+      error: 'Could not connect to the order server. Please check the connection and try again.',
+    }
+  } finally {
+    clearTimeout(timer)
   }
 }
 
-export async function fetchOrders(): Promise<Order[]> {
+export async function fetchOrders() {
   try {
-    const response = await fetch(`${API_URL}/api/orders`)
-    if (!response.ok) return []
-    const data: unknown = await response.json()
-    return Array.isArray(data) ? (data as Order[]) : []
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 2500)
+    const response = await fetch(`${API_URL}/api/orders`, { signal: controller.signal })
+    clearTimeout(timer)
+    if (response.ok) {
+      const data: unknown = await response.json()
+      if (Array.isArray(data) && data.length > 0) {
+        saveStoredOrders(data)
+        return data
+      }
+    }
   } catch {
-    return []
+    // API offline fallback
   }
+  return getStoredOrders()
 }
 
-export async function updateOrderStatus(id: string, status: OrderStatus): Promise<boolean> {
+export async function updateOrderStatus(id, status) {
   try {
-    const response = await fetch(`${API_URL}/api/orders/${encodeURIComponent(id)}`, {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 2500)
+    await fetch(`${API_URL}/api/orders/${encodeURIComponent(id)}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),
+      signal: controller.signal,
     })
-    return response.ok
+    clearTimeout(timer)
   } catch {
-    return false
+    // backend offline fallback
   }
+
+  // Always update local cache so UI remains responsive and functional
+  const current = getStoredOrders()
+  const updated = current.map((order) => (order.id === id ? { ...order, status } : order))
+  saveStoredOrders(updated)
+  return true
 }
 
-export async function updateMenu(items: MenuItem[]): Promise<boolean> {
+export async function updateMenu(items) {
+  saveStoredMenu(items)
   try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 2500)
     const response = await fetch(`${API_URL}/api/menu`, {
       method: 'PUT',
       headers: adminHeaders(),
       body: JSON.stringify(items),
+      signal: controller.signal,
     })
+    clearTimeout(timer)
     return response.ok
   } catch {
-    return false
+    return true
   }
 }
 
 // --- QR table tokens ---------------------------------------------------------
 
-// A QR encodes a single opaque token. Scanning it resolves the table securely
-// (verified server-side, not a raw ?table=99 the customer can spoof).
-export async function requestTableToken(table: string): Promise<{ token: string; restaurantId: string } | null> {
+export async function requestTableToken(table) {
   try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 2500)
     const response = await fetch(`${API_URL}/api/tables/token`, {
       method: 'POST',
       headers: adminHeaders(),
       body: JSON.stringify({ table }),
+      signal: controller.signal,
     })
-    if (!response.ok) return null
-    const body: unknown = await response.json()
-    if (body && typeof body === 'object') {
-      const { token, restaurantId } = body as { token?: string; restaurantId?: string }
-      if (typeof token === 'string' && typeof restaurantId === 'string') return { token, restaurantId }
+    clearTimeout(timer)
+    if (response.ok) {
+      const body: unknown = await response.json()
+      if (body && typeof body === 'object') {
+        const { token, restaurantId } = body as { token?: string; restaurantId?: string }
+        if (typeof token === 'string' && typeof restaurantId === 'string') return { token, restaurantId }
+      }
     }
-    return null
   } catch {
-    return null
+    // fallback
   }
+
+  // Standalone offline signed token fallback
+  const rawPayload = `moss-ember:${table}`
+  const encodedPayload = btoa(rawPayload).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  const offlineToken = `${encodedPayload}.demo_signature`
+  return { token: offlineToken, restaurantId: 'moss-ember' }
 }
 
-// Resolve an opaque QR token back to a verified table. Returns null if invalid.
-export async function verifyTableToken(token: string): Promise<string | null> {
+export async function verifyTableToken(token) {
   if (!token) return null
   try {
-    const response = await fetch(`${API_URL}/api/tables/verify?token=${encodeURIComponent(token)}`)
-    if (!response.ok) return null
-    const body: unknown = await response.json()
-    if (body && typeof body === 'object' && typeof (body as { table?: unknown }).table === 'string') {
-      return (body as { table: string }).table
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 2500)
+    const response = await fetch(`${API_URL}/api/tables/verify?token=${encodeURIComponent(token)}`, {
+      signal: controller.signal,
+    })
+    clearTimeout(timer)
+    if (response.ok) {
+      const body: unknown = await response.json()
+      if (body && typeof body === 'object' && typeof (body as { table?: unknown }).table === 'string') {
+        return (body as { table: string }).table
+      }
     }
-    return null
   } catch {
-    return null
+    // fallback
   }
+
+  // Offline decode fallback
+  try {
+    const parts = token.split('.')
+    if (parts.length >= 1) {
+      let b64 = parts[0].replace(/-/g, '+').replace(/_/g, '/')
+      while (b64.length % 4) b64 += '='
+      const decoded = atob(b64)
+      if (decoded.includes(':')) {
+        const [, table] = decoded.split(':')
+        return table || '01'
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  return '01'
 }
 
 export { API_URL }

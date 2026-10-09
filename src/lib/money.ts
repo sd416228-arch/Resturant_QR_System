@@ -1,21 +1,19 @@
-// Money is stored as integer paisa (1 NPR = 100 paisa) to avoid floating-point
-// currency rounding errors. Formatting is locale-aware (Nepal by default).
+// Money is stored as integer paisa (100 paisa = Rs. 1) to avoid rounding errors.
 
-const CURRENCY = 'NPR'
-const LOCALE = 'ne-NP'
+const LOCALE = 'en-IN'
 
 export function formatPaisa(paisa: number): string {
-  if (!Number.isFinite(paisa)) {
-    try {
-      return new Intl.NumberFormat(LOCALE, { style: 'currency', currency: CURRENCY }).format(0)
-    } catch {
-      return `Rs. 0`
-    }
-  }
+  return formatRupees(Number.isFinite(paisa) ? paisa / 100 : 0)
+}
+
+export function formatRupees(rupees: number): string {
+  const amount = Number.isFinite(rupees) ? rupees : 0
   try {
-    return new Intl.NumberFormat(LOCALE, { style: 'currency', currency: CURRENCY }).format(paisa / 100)
+    return `Rs. ${new Intl.NumberFormat(LOCALE, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount)}`
   } catch {
-    // Fallback if the runtime lacks ne-NP data (keeps build from crashing).
-    return `Rs. ${(paisa / 100).toFixed(2)}`
+    return `Rs. ${amount.toFixed(2)}`
   }
 }
