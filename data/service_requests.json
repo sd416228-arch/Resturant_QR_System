@@ -1,0 +1,17 @@
+[
+  {
+    "id": "SR-946774",
+    "restaurantId": "moss-ember",
+    "tableNumber": "04",
+    "requestType": "water",
+    "message": "Cold water please",
+    "status": "Completed",
+    "assignedWaiterId": "W-01",
+    "assignedWaiterName": "Alex Rivera",
+    "createdAt": "2026-10-10T14:02:26.774Z",
+    "acceptedAt": "2026-10-10T14:02:42.389Z",
+    "startedAt": "2026-10-10T14:02:56.708Z",
+    "completedAt": "2026-10-10T14:03:08.659Z",
+    "updatedAt": "2026-10-10T14:03:08.659Z"
+  }
+]

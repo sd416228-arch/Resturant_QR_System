@@ -42,9 +42,11 @@ function getElapsedMinutes(order: Order): number {
 export default function KitchenView({
   orders,
   onStatusChange,
+  readOnly = false,
 }: {
   orders: Order[]
-  onStatusChange: (id: string, status: OrderStatus) => void
+  onStatusChange?: (id: string, status: OrderStatus) => void
+  readOnly?: boolean
 }) {
   const [soundEnabled, setSoundEnabled] = useState(() => {
     return localStorage.getItem('sprig_kitchen_sound') !== 'false'
@@ -52,17 +54,22 @@ export default function KitchenView({
   const [search, setSearch] = useState('')
   const prevNewCount = useRef<number | null>(null)
 
-  const newOrders = orders.filter((o) => o.status === 'New')
+  const newOrders = orders.filter((o) => (o?.status || '').toLowerCase() === 'new')
+  const activeOrders = orders.filter((o) => {
+    const s = (o?.status || '').toLowerCase()
+    return s !== 'completed' && s !== 'cancelled'
+  })
 
-  // Play audio chime when a new order appears
+  // Play audio chime when a new order appears (only for interactive kitchen station)
   useEffect(() => {
+    if (readOnly) return
     if (prevNewCount.current !== null && newOrders.length > prevNewCount.current) {
       if (soundEnabled) {
         playNewOrderChime()
       }
     }
     prevNewCount.current = newOrders.length
-  }, [newOrders.length, soundEnabled])
+  }, [newOrders.length, soundEnabled, readOnly])
 
   const toggleSound = () => {
     const next = !soundEnabled
@@ -72,73 +79,183 @@ export default function KitchenView({
   }
 
   const handleCancel = (id: string) => {
+    if (readOnly || !onStatusChange) return
     if (window.confirm(`Are you sure you want to cancel order ${id}?`)) {
       onStatusChange(id, 'Cancelled')
     }
   }
 
+  const [filterTab, setFilterTab] = useState<'all' | 'New' | 'Preparing' | 'Ready'>('all')
+
   const filteredOrders = orders.filter((o) => {
+    if (!o) return false
+    const statusLower = (o.status || '').toLowerCase()
+    if (filterTab !== 'all' && statusLower !== filterTab.toLowerCase()) return false
     if (!search.trim()) return true
     const q = search.toLowerCase()
-    return (
-      o.id.toLowerCase().includes(q) ||
-      o.table.toLowerCase().includes(q) ||
-      o.items.some((i) => i.name.toLowerCase().includes(q))
-    )
+    const idMatch = String(o.id || '').toLowerCase().includes(q)
+    const tableMatch = String(o.table || '').toLowerCase().includes(q)
+    const itemsMatch = Array.isArray(o.items) && o.items.some((line) => {
+      const name = line?.name || (line as any)?.item?.name || ''
+      return name.toLowerCase().includes(q)
+    })
+    const noteMatch = String(o.note || '').toLowerCase().includes(q)
+    return idMatch || tableMatch || itemsMatch || noteMatch
   })
 
+  const newCount = orders.filter((o) => (o?.status || '').toLowerCase() === 'new').length
+  const prepCount = orders.filter((o) => (o?.status || '').toLowerCase() === 'preparing').length
+  const readyCount = orders.filter((o) => (o?.status || '').toLowerCase() === 'ready').length
+
   return (
-    <div className="page kitchen-page">
+    <div className={`page kitchen-page ${readOnly ? 'kitchen-monitor-mode' : ''}`}>
       <PageTitle
-        eyebrow="Live kitchen queue"
-        title="Kitchen Display System"
+        eyebrow={readOnly ? 'Administrative Supervisory Monitor · Station Oversight' : 'Live kitchen queue'}
+        title={readOnly ? 'Kitchen Station Monitor' : 'Kitchen Display System'}
         action={
           <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-            <button
-              type="button"
-              onClick={toggleSound}
-              className="secondary-button"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.4rem',
-                background: soundEnabled ? '#dcfce7' : '#f1f5f9',
-                color: soundEnabled ? '#166534' : '#64748b',
-                borderColor: soundEnabled ? '#86efac' : '#cbd5e1',
-              }}
-              title="Toggle audio chime for incoming orders"
-            >
-              <span>{soundEnabled ? '🔔 Chime: ON' : '🔕 Chime: OFF'}</span>
-            </button>
+            {readOnly ? (
+              <span
+                style={{
+                  fontSize: '0.78rem',
+                  background: '#f1f5f9',
+                  color: '#334155',
+                  border: '1px solid #cbd5e1',
+                  padding: '0.35rem 0.75rem',
+                  borderRadius: '20px',
+                  fontWeight: 600,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                }}
+              >
+                <span>👁️ Observer Mode (Controls Disabled)</span>
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={toggleSound}
+                className="secondary-button"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  background: soundEnabled ? '#dcfce7' : '#f1f5f9',
+                  color: soundEnabled ? '#166534' : '#64748b',
+                  borderColor: soundEnabled ? '#86efac' : '#cbd5e1',
+                }}
+                title="Toggle audio chime for incoming orders"
+              >
+                <span>{soundEnabled ? '🔔 Chime: ON' : '🔕 Chime: OFF'}</span>
+              </button>
+            )}
             <span className="live-indicator">
-              <i /> Live Service ({orders.filter((o) => o.status !== 'Completed' && o.status !== 'Cancelled').length} Active)
+              <i /> Live Service ({activeOrders.length} Active)
             </span>
           </div>
         }
       />
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Filter by table, item, or order #…"
+      {/* Supervisory Notice Banner for Admin View */}
+      {readOnly && (
+        <div
           style={{
-            maxWidth: '300px',
-            padding: '0.5rem 0.8rem',
-            borderRadius: '6px',
-            border: '1px solid var(--line)',
-            fontSize: '0.85rem',
-            background: 'var(--paper)',
+            background: '#f8fafc',
+            border: '1px solid #e2e8f0',
+            borderRadius: '8px',
+            padding: '0.85rem 1.25rem',
+            marginBottom: '1.25rem',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '0.75rem',
           }}
-        />
-        <span style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>
-          Tip: Advance tickets as dishes progress through preparation.
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <span style={{ fontSize: '1.4rem' }}>🍳</span>
+            <div>
+              <strong style={{ fontSize: '0.88rem', color: '#1e293b', display: 'block' }}>
+                Admin Real-Time Kitchen Monitor
+              </strong>
+              <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748b' }}>
+                Supervisory view of all active kitchen tickets, cooking progress, and table wait times. Line-cook action buttons are disabled here so administrative staff cannot alter cook tickets.
+              </p>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.6rem' }}>
+            <span style={{ fontSize: '0.75rem', background: '#e0f2fe', color: '#0369a1', padding: '0.25rem 0.6rem', borderRadius: '4px', fontWeight: 600 }}>
+              {newCount} in queue
+            </span>
+            <span style={{ fontSize: '0.75rem', background: '#fef3c7', color: '#92400e', padding: '0.25rem 0.6rem', borderRadius: '4px', fontWeight: 600 }}>
+              {prepCount} cooking
+            </span>
+            <span style={{ fontSize: '0.75rem', background: '#dcfce7', color: '#166534', padding: '0.25rem 0.6rem', borderRadius: '4px', fontWeight: 600 }}>
+              {readyCount} ready
+            </span>
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search table, order, dish…"
+            style={{
+              maxWidth: '220px',
+              padding: '0.5rem 0.8rem',
+              borderRadius: '6px',
+              border: '1px solid var(--line)',
+              fontSize: '0.85rem',
+              background: 'var(--paper)',
+            }}
+          />
+          <div className="filter-tabs">
+            <button
+              type="button"
+              className={filterTab === 'all' ? 'selected' : ''}
+              onClick={() => setFilterTab('all')}
+            >
+              All Active ({activeOrders.length})
+            </button>
+            <button
+              type="button"
+              className={filterTab === 'New' ? 'selected' : ''}
+              onClick={() => setFilterTab('New')}
+            >
+              New ({newCount})
+            </button>
+            <button
+              type="button"
+              className={filterTab === 'Preparing' ? 'selected' : ''}
+              onClick={() => setFilterTab('Preparing')}
+            >
+              Cooking ({prepCount})
+            </button>
+            <button
+              type="button"
+              className={filterTab === 'Ready' ? 'selected' : ''}
+              onClick={() => setFilterTab('Ready')}
+            >
+              Ready ({readyCount})
+            </button>
+          </div>
+        </div>
+        <span style={{ fontSize: '0.82rem', color: 'var(--muted)' }}>
+          {readOnly
+            ? 'Tickets update live as kitchen cooks advance preparation on the line.'
+            : 'Kitchen Station: Advance tickets as dishes progress through preparation.'}
         </span>
       </div>
 
       <div className="kitchen-board">
         {COLUMNS.map((status) => {
-          const colOrders = filteredOrders.filter((o) => o.status === status)
+          const colOrders = filteredOrders.filter(
+            (o) => (o.status || '').toLowerCase() === status.toLowerCase()
+          )
           return (
             <div className="kitchen-column" key={status}>
               <div className="column-heading">
@@ -149,6 +266,7 @@ export default function KitchenView({
                 const elapsedMin = getElapsedMinutes(order)
                 const isDelayed = elapsedMin >= 15
                 const isWarm = elapsedMin >= 7 && elapsedMin < 15
+                const tableLabel = order.table || `Table ${order.tableNumber || '01'}`
 
                 return (
                   <article className="ticket" key={order.id} style={{ position: 'relative' }}>
@@ -170,18 +288,31 @@ export default function KitchenView({
                         </span>
                       </div>
                     </div>
-                    <h3>{order.table}</h3>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '0.6rem 0 0.4rem' }}>
+                      <span style={{ font: '700 1.35rem "Playfair Display", serif', color: 'var(--green)', letterSpacing: '-0.5px' }}>
+                        {tableLabel.toUpperCase()}
+                      </span>
+                      <span style={{ fontSize: '0.75rem', background: '#f1f5f9', color: '#475569', padding: '0.2rem 0.5rem', borderRadius: '4px', fontWeight: 600 }}>
+                        {Array.isArray(order.items) ? order.items.reduce((sum, i) => sum + (i.quantity || 1), 0) : 0} items
+                      </span>
+                    </div>
                     <div style={{ borderTop: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0', padding: '0.4rem 0', margin: '0.5rem 0' }}>
-                      {order.items.map((line) => (
-                        <p key={line.itemId} style={{ margin: '0.35rem 0', display: 'flex', justifyContent: 'space-between' }}>
-                          <span>
-                            <b style={{ color: 'var(--green)', fontSize: '1rem', marginRight: '0.3rem' }}>
-                              {line.quantity}×
-                            </b>
-                            {line.name}
-                          </span>
-                        </p>
-                      ))}
+                      {Array.isArray(order.items) &&
+                        order.items.map((line, idx) => {
+                          const itemName = line?.name || (line as any)?.item?.name || 'Dish'
+                          const itemQty = line?.quantity || (line as any)?.qty || 1
+                          const itemKey = line?.itemId ?? (line as any)?.item?.id ?? idx
+                          return (
+                            <p key={itemKey} style={{ margin: '0.35rem 0', display: 'flex', justifyContent: 'space-between' }}>
+                              <span>
+                                <b style={{ color: 'var(--green)', fontSize: '1rem', marginRight: '0.3rem' }}>
+                                  {itemQty}×
+                                </b>
+                                {itemName}
+                              </span>
+                            </p>
+                          )
+                        })}
                     </div>
 
                     {order.note && (
@@ -190,33 +321,81 @@ export default function KitchenView({
                       </div>
                     )}
 
-                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
-                      <button
-                        className="ticket-action"
-                        onClick={() => onStatusChange(order.id, nextStatus(status))}
-                        style={{ flex: 3 }}
-                      >
-                        {actionLabel(status)} →
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleCancel(order.id)}
-                        title="Cancel ticket"
+                    {/* Action buttons (only for physical Kitchen Display role) */}
+                    {!readOnly && onStatusChange ? (
+                      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
+                        <button
+                          className="ticket-action"
+                          onClick={() => onStatusChange(order.id, nextStatus(status))}
+                          style={{ flex: 3 }}
+                        >
+                          {actionLabel(status)} →
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleCancel(order.id)}
+                          title="Cancel ticket"
+                          style={{
+                            flex: 1,
+                            marginTop: '10px',
+                            border: '1px solid #fca5a5',
+                            borderRadius: '4px',
+                            background: '#fff1f2',
+                            color: '#b91c1c',
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      /* Read-Only Status Indicators (Admin Oversight Mode - No action buttons) */
+                      <div
                         style={{
-                          flex: 1,
-                          marginTop: '10px',
-                          border: '1px solid #fca5a5',
-                          borderRadius: '4px',
-                          background: '#fff1f2',
-                          color: '#b91c1c',
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          cursor: 'pointer',
+                          marginTop: '0.75rem',
+                          padding: '0.5rem 0.65rem',
+                          borderRadius: '6px',
+                          background:
+                            status === 'Ready'
+                              ? '#ecfdf5'
+                              : status === 'Preparing'
+                              ? '#fffbeb'
+                              : '#f8fafc',
+                          border: `1px solid ${
+                            status === 'Ready'
+                              ? '#a7f3d0'
+                              : status === 'Preparing'
+                              ? '#fde68a'
+                              : '#e2e8f0'
+                          }`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          fontSize: '0.75rem',
                         }}
                       >
-                        Cancel
-                      </button>
-                    </div>
+                        <span
+                          style={{
+                            fontWeight: 600,
+                            color:
+                              status === 'Ready'
+                                ? '#065f46'
+                                : status === 'Preparing'
+                                ? '#92400e'
+                                : '#475569',
+                          }}
+                        >
+                          {status === 'Ready'
+                            ? '🛎️ Food Ready to Serve'
+                            : status === 'Preparing'
+                            ? '🍳 Cooking by Kitchen Station'
+                            : '🕒 Queued for Kitchen Line'}
+                        </span>
+                        <small style={{ color: '#94a3b8', fontSize: '0.7rem' }}>Observer Only</small>
+                      </div>
+                    )}
                   </article>
                 )
               })}

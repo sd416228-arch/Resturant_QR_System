@@ -1,7 +1,5 @@
 import { DEFAULT_MENU, DEFAULT_ORDERS } from './mockData'
-import type { Order } from '../types'
-
-const API_PORT = String(import.meta.env.VITE_API_PORT || 8787)
+import type { Order, ServiceRequest, ServiceRequestStatus, ServiceRequestType } from '../types'
 
 // Resolve the API base URL.
 //
@@ -13,8 +11,7 @@ const API_PORT = String(import.meta.env.VITE_API_PORT || 8787)
 function resolveApiUrl(): string {
   const override = import.meta.env.VITE_API_URL
   if (typeof override === 'string' && override.trim()) return override.trim().replace(/\/$/, '')
-  if (window.location.port === API_PORT || window.location.port === '5173') return window.location.origin
-  return `${window.location.protocol}//${window.location.hostname}:${API_PORT}`
+  return window.location.origin
 }
 
 const API_URL = resolveApiUrl()
@@ -292,6 +289,228 @@ export async function verifyTableToken(token) {
   }
 
   return '01'
+}
+
+// --- Service Requests (Waiter assistance API) ---
+
+const STORAGE_KEY_SERVICE_REQUESTS = 'sprig_service_requests'
+
+export function getStoredServiceRequests(): ServiceRequest[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_SERVICE_REQUESTS)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) return parsed
+    }
+  } catch {}
+  return []
+}
+
+export function saveStoredServiceRequests(reqs: ServiceRequest[]) {
+  try {
+    localStorage.setItem(STORAGE_KEY_SERVICE_REQUESTS, JSON.stringify(reqs))
+  } catch {}
+}
+
+export async function fetchServiceRequests(): Promise<ServiceRequest[]> {
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 2500)
+    const response = await fetch(`${API_URL}/api/service-requests`, { signal: controller.signal })
+    clearTimeout(timer)
+    if (response.ok) {
+      const data: unknown = await response.json()
+      if (Array.isArray(data)) {
+        saveStoredServiceRequests(data)
+        return data as ServiceRequest[]
+      }
+    }
+  } catch {}
+  return getStoredServiceRequests()
+}
+
+export async function createServiceRequest(input: {
+  requestType: ServiceRequestType
+  message?: string
+  tableToken?: string
+  tableNumber: string
+}): Promise<{ ok: true; request: ServiceRequest } | { ok: false; error: string; request?: ServiceRequest }> {
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 3000)
+    const response = await fetch(`${API_URL}/api/service-requests`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+      signal: controller.signal,
+    })
+    clearTimeout(timer)
+    const body: any = await response.json().catch(() => null)
+    if (!response.ok) {
+      return {
+        ok: false,
+        error: body?.error || `Could not submit request (${response.status})`,
+        request: body?.request,
+      }
+    }
+    if (body?.request) {
+      const current = getStoredServiceRequests()
+      saveStoredServiceRequests([body.request, ...current.filter((r) => r.id !== body.request.id)])
+      return { ok: true, request: body.request }
+    }
+  } catch {}
+
+  // Fallback offline request
+  const offlineReq: ServiceRequest = {
+    id: `SR-${Date.now().toString().slice(-6)}`,
+    restaurantId: 'moss-ember',
+    tableNumber: input.tableNumber,
+    requestType: input.requestType,
+    message: input.message || '',
+    status: 'Pending',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  }
+  const current = getStoredServiceRequests()
+  saveStoredServiceRequests([offlineReq, ...current])
+  return { ok: true, request: offlineReq }
+}
+
+export async function acceptServiceRequest(
+  id: string,
+  waiterId: string,
+  waiterName: string
+): Promise<{ ok: true; request: ServiceRequest } | { ok: false; error: string; conflict?: boolean; assignedWaiterName?: string }> {
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 2500)
+    const response = await fetch(`${API_URL}/api/service-requests/${encodeURIComponent(id)}/accept`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ waiterId, waiterName }),
+      signal: controller.signal,
+    })
+    clearTimeout(timer)
+    const body: any = await response.json().catch(() => null)
+    if (response.status === 409) {
+      return {
+        ok: false,
+        conflict: true,
+        error: body?.error || 'Request was already accepted by another waiter.',
+        assignedWaiterName: body?.assignedWaiterName,
+      }
+    }
+    if (!response.ok) {
+      return {
+        ok: false,
+        error: body?.error || 'Failed to accept request.',
+      }
+    }
+    if (body?.request) {
+      const current = getStoredServiceRequests()
+      const updated = current.map((r) => (r.id === id ? body.request : r))
+      saveStoredServiceRequests(updated)
+      return { ok: true, request: body.request }
+    }
+  } catch {}
+
+  // Offline optimistic accept
+  const current = getStoredServiceRequests()
+  const req = current.find((r) => r.id === id)
+  if (req) {
+    if (req.status !== 'Pending') {
+      return { ok: false, conflict: true, error: `Already accepted by ${req.assignedWaiterName || 'another staff'}` }
+    }
+    req.status = 'Accepted'
+    req.assignedWaiterId = waiterId
+    req.assignedWaiterName = waiterName
+    req.acceptedAt = new Date().toISOString()
+    req.updatedAt = new Date().toISOString()
+    saveStoredServiceRequests([...current])
+    return { ok: true, request: req }
+  }
+  return { ok: false, error: 'Request not found' }
+}
+
+export async function updateServiceRequestStatus(
+  id: string,
+  status: 'In Progress' | 'Completed' | 'Cancelled',
+  waiterId?: string,
+  isAdmin: boolean = false
+): Promise<{ ok: true; request?: ServiceRequest } | { ok: false; error: string }> {
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 2500)
+    const response = await fetch(`${API_URL}/api/service-requests/${encodeURIComponent(id)}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status, waiterId, isAdmin }),
+      signal: controller.signal,
+    })
+    clearTimeout(timer)
+    const body: any = await response.json().catch(() => null)
+    if (!response.ok) {
+      return { ok: false, error: body?.error || 'Failed to update request' }
+    }
+    if (body?.request) {
+      const current = getStoredServiceRequests()
+      const updated = current.map((r) => (r.id === id ? body.request : r))
+      saveStoredServiceRequests(updated)
+      return { ok: true, request: body.request }
+    }
+  } catch {}
+
+  // Offline fallback
+  const current = getStoredServiceRequests()
+  const updated = current.map((r) => {
+    if (r.id === id) {
+      const now = new Date().toISOString()
+      return {
+        ...r,
+        status,
+        updatedAt: now,
+        startedAt: status === 'In Progress' && !r.startedAt ? now : r.startedAt,
+        completedAt: status === 'Completed' ? now : r.completedAt,
+      }
+    }
+    return r
+  })
+  saveStoredServiceRequests(updated)
+  return { ok: true }
+}
+
+export async function reassignServiceRequest(
+  id: string,
+  params: {
+    newWaiterId?: string
+    newWaiterName?: string
+    waiterId?: string
+    isAdmin?: boolean
+  }
+): Promise<{ ok: true; request?: ServiceRequest } | { ok: false; error: string }> {
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 2500)
+    const response = await fetch(`${API_URL}/api/service-requests/${encodeURIComponent(id)}/reassign`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+      signal: controller.signal,
+    })
+    clearTimeout(timer)
+    const body: any = await response.json().catch(() => null)
+    if (!response.ok) {
+      return { ok: false, error: body?.error || 'Failed to reassign request' }
+    }
+    if (body?.request) {
+      const current = getStoredServiceRequests()
+      const updated = current.map((r) => (r.id === id ? body.request : r))
+      saveStoredServiceRequests(updated)
+      return { ok: true, request: body.request }
+    }
+  } catch {}
+
+  return { ok: true }
 }
 
 export { API_URL }

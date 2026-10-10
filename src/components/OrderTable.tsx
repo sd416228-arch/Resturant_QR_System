@@ -1,15 +1,13 @@
 import { useState } from 'react'
-import type { Order, OrderStatus } from '../types'
+import type { Order } from '../types'
 import { formatPaisa } from '../lib/money'
-
-const STATUSES: OrderStatus[] = ['New', 'Preparing', 'Ready', 'Completed', 'Cancelled']
 
 export default function OrderTable({
   orders,
   onStatusChange,
 }: {
   orders: Order[]
-  onStatusChange: (id: string, status: OrderStatus) => void
+  onStatusChange: (id: string, status: any) => void
 }) {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
 
@@ -29,13 +27,11 @@ export default function OrderTable({
               <th>Total</th>
               <th>Status</th>
               <th>Placed</th>
-              <th>Actions</th>
+              <th>Details</th>
             </tr>
           </thead>
           <tbody>
             {orders.map((order) => {
-              const isLocked = order.status === 'Completed' || order.status === 'Cancelled'
-
               return (
                 <tr
                   key={order.id}
@@ -83,29 +79,18 @@ export default function OrderTable({
                   </td>
                   <td>{order.time}</td>
                   <td onClick={(e) => e.stopPropagation()}>
-                    <select
-                      className="status-select"
-                      value={order.status}
-                      disabled={isLocked}
-                      onChange={(event) =>
-                        onStatusChange(order.id, event.target.value as OrderStatus)
-                      }
-                      title={isLocked ? `Locked: ${order.status} orders cannot be modified` : 'Change order status'}
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => setSelectedOrder(order)}
                       style={{
-                        opacity: isLocked ? 0.6 : 1,
-                        cursor: isLocked ? 'not-allowed' : 'pointer',
-                        padding: '0.35rem 0.5rem',
+                        padding: '0.3rem 0.6rem',
+                        fontSize: '0.75rem',
                         borderRadius: '4px',
-                        border: '1px solid var(--line)',
-                        background: 'var(--paper)',
                       }}
                     >
-                      {STATUSES.map((status) => (
-                        <option key={status} value={status}>
-                          {status}
-                        </option>
-                      ))}
-                    </select>
+                      View Details ↗
+                    </button>
                   </td>
                 </tr>
               )
@@ -193,25 +178,25 @@ export default function OrderTable({
               </button>
               {selectedOrder.status !== 'Completed' && selectedOrder.status !== 'Cancelled' && (
                 <button
-                  className="primary-button"
+                  type="button"
                   onClick={() => {
-                    const next: OrderStatus =
-                      selectedOrder.status === 'New'
-                        ? 'Preparing'
-                        : selectedOrder.status === 'Preparing'
-                          ? 'Ready'
-                          : 'Completed'
-                    onStatusChange(selectedOrder.id, next)
-                    setSelectedOrder(null)
+                    if (window.confirm(`Are you sure you want to administratively cancel order ${selectedOrder.id}?`)) {
+                      onStatusChange(selectedOrder.id, 'Cancelled')
+                      setSelectedOrder(null)
+                    }
+                  }}
+                  style={{
+                    padding: '0.45rem 0.85rem',
+                    background: '#fff1f2',
+                    color: '#b91c1c',
+                    border: '1px solid #fecaca',
+                    borderRadius: '4px',
+                    fontSize: '0.8rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
                   }}
                 >
-                  Advance to{' '}
-                  {selectedOrder.status === 'New'
-                    ? 'Preparing'
-                    : selectedOrder.status === 'Preparing'
-                      ? 'Ready'
-                      : 'Completed'}{' '}
-                  →
+                  Void Order ✕
                 </button>
               )}
             </div>

@@ -1,0 +1,7 @@
+{
+  "name": "Restaurant QR System",
+  "description": "QR code restaurant ordering and floor management system with live kitchen display, menu management, and real-time order tracking.",
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

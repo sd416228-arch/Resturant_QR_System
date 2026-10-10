@@ -4,10 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "api": "node --env-file-if-exists=.env backend/server.js",
+    "dev": "tsx server.ts",
+    "start": "node server.ts",
     "build": "tsc -b && vite build",
-    "serve": "node --env-file-if-exists=.env backend/server.js",
     "lint": "oxlint",
     "preview": "vite preview"
   },
@@ -27,6 +26,7 @@
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.1.0",
     "oxlint": "^1.79.0",
+    "tsx": "^4.23.15",
     "typescript": "~6.0.2",
     "vite": "^8.2.2"
   }

@@ -1,261 +1,455 @@
 import { useEffect, useState } from 'react'
-import QRCode from 'qrcode'
-import { API_URL } from './lib/api'
-import { formatRupees } from './lib/money'
-import CustomerOrderView from './components/CustomerView'
+import Sidebar from './components/Sidebar'
+import OverviewView from './components/OverviewView'
+import OrdersView from './components/OrdersView'
+import MenuView from './components/MenuView'
+import TablesView from './components/TablesView'
+import KitchenView from './components/KitchenView'
+import ReportsView from './components/ReportsView'
+import SettingsView from './components/SettingsView'
+import CustomerView from './components/CustomerView'
+import WaiterView from './components/WaiterView'
+import ServiceRequestsAdminView from './components/ServiceRequestsAdminView'
+import Toast from './components/Toast'
+import { useMenu } from './hooks/useMenu'
+import { useOrders } from './hooks/useOrders'
+import { useServiceRequests } from './hooks/useServiceRequests'
+import { verifyTableToken } from './lib/api'
+import type { OrderStatus } from './types'
 
-type Status = 'New' | 'Preparing' | 'Ready' | 'Completed' | 'Cancelled'
-type Item = { id: number; name: string; description: string; price: number; category: string; image: string; available: boolean; prep: number; tags: string[] }
-type Order = { id: string; table: string; items: { item: Item; quantity: number }[]; total: number; status: Status; time: string; note?: string }
-type ApiOrder = { id: string; table: string; items: { itemId: number; name: string; pricePaisa: number; quantity: number }[]; totalPaisa: number; status: Status; time: string; note?: string }
+export type AppRole = 'customer' | 'kitchen' | 'waiter' | 'admin'
 
-function isApiOrder(value: unknown): value is ApiOrder {
-  if (!value || typeof value !== 'object') return false
-  const order = value as Partial<ApiOrder>
-  return (
-    typeof order.id === 'string' &&
-    typeof order.table === 'string' &&
-    Array.isArray(order.items) &&
-    order.items.every((line) =>
-      typeof line.itemId === 'number' &&
-      typeof line.name === 'string' &&
-      typeof line.pricePaisa === 'number' &&
-      typeof line.quantity === 'number'
-    ) &&
-    typeof order.totalPaisa === 'number' &&
-    typeof order.time === 'string' &&
-    ['New', 'Preparing', 'Ready', 'Completed', 'Cancelled'].includes(order.status as string)
-  )
-}
-
-function fromApiOrder(order: ApiOrder, menu: Item[]): Order {
-  return {
-    id: order.id,
-    table: order.table,
-    items: order.items.map((line) => {
-      const menuItem = menu.find((item) => item.id === line.itemId)
-      return {
-        item: {
-          ...(menuItem || {
-            id: line.itemId,
-            description: '',
-            category: 'Mains',
-            image: '',
-            available: true,
-            prep: 10,
-            tags: [],
-          }),
-          name: line.name,
-          price: line.pricePaisa / 100,
-        },
-        quantity: line.quantity,
-      }
-    }),
-    total: order.totalPaisa / 100,
-    status: order.status,
-    time: order.time,
-    note: order.note,
+function getInitialRole(): AppRole {
+  const path = window.location.pathname.toLowerCase()
+  const search = new URLSearchParams(window.location.search)
+  if (path.includes('/waiter') || search.get('role') === 'waiter') {
+    return 'waiter'
   }
-}
-
-const seedItems: Item[] = [
-  { id: 1, name: 'Truffle eggs on toast', description: 'Soft scrambled eggs, wild mushrooms, sourdough.', price: 14, category: 'Breakfast', image: 'https://images.unsplash.com/photo-1525351484163-7529414344d8?w=700&q=80', available: true, prep: 12, tags: ['Popular', 'Vegetarian'] },
-  { id: 2, name: 'Crispy chicken bao', description: 'Buttermilk chicken, pickled cucumber, sesame aioli.', price: 12, category: 'Small plates', image: 'https://images.unsplash.com/photo-1563245372-f21724e3856d?w=700&q=80', available: true, prep: 15, tags: ['Popular'] },
-  { id: 3, name: 'Miso salmon bowl', description: 'Glazed salmon, jasmine rice, greens, ginger dressing.', price: 19, category: 'Mains', image: 'https://images.unsplash.com/photo-1547592180-85f173990554?w=700&q=80', available: true, prep: 18, tags: ['Chef pick'] },
-  { id: 4, name: 'Charred corn salad', description: 'Avocado, feta, herbs, lime and toasted pepitas.', price: 11, category: 'Small plates', image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=700&q=80', available: true, prep: 8, tags: ['Vegan'] },
-  { id: 5, name: 'Citrus spritz', description: 'Blood orange, rosemary, tonic and sparkling wine.', price: 9, category: 'Drinks', image: 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=700&q=80', available: true, prep: 3, tags: ['New'] },
-]
-const seedOrders: Order[] = [
-  { id: '#1048', table: 'Table 04', items: [{ item: seedItems[2], quantity: 1 }, { item: seedItems[4], quantity: 2 }], total: 37, status: 'Preparing', time: '12:41 PM' },
-  { id: '#1047', table: 'Table 02', items: [{ item: seedItems[0], quantity: 2 }], total: 28, status: 'New', time: '12:38 PM', note: 'One egg fully cooked, please.' },
-  { id: '#1046', table: 'Table 11', items: [{ item: seedItems[1], quantity: 1 }, { item: seedItems[3], quantity: 1 }], total: 23, status: 'Ready', time: '12:30 PM' },
-  { id: '#1045', table: 'Table 07', items: [{ item: seedItems[2], quantity: 2 }], total: 38, status: 'Completed', time: '12:15 PM' },
-]
-const money = formatRupees
-const load = <T,>(key: string, fallback: T): T => { try { return JSON.parse(localStorage.getItem(key) || '') as T } catch { return fallback } }
-
-function getInitialView() {
-  const path = window.location.pathname.replace(/\/+$/, '') || '/'
-  if (path === '/customer' || new URLSearchParams(window.location.search).has('table')) {
-    return 'Customer view'
+  if (path.includes('/kitchen') || search.get('role') === 'kitchen') {
+    return 'kitchen'
   }
-  if (path === '/kitchen') return 'Kitchen'
-  return 'Overview'
+  if (
+    path.includes('/customer') ||
+    search.has('t') ||
+    search.has('table') ||
+    search.get('role') === 'customer'
+  ) {
+    return 'customer'
+  }
+  return 'admin'
 }
 
-function App() {
-  const scannedTable = new URLSearchParams(window.location.search).get('table')
-  const [view, setView] = useState(getInitialView)
-  const [items, setItems] = useState(() => load('menu-items', seedItems))
-  const [orders, setOrders] = useState(() => load('orders', seedOrders))
-  const [cart, setCart] = useState<{ item: Item; quantity: number }[]>([])
+function getInitialTable(): string {
+  const search = new URLSearchParams(window.location.search)
+  if (search.get('table')) {
+    return search.get('table')!.replace(/\D/g, '').padStart(2, '0') || '04'
+  }
+  return localStorage.getItem('sprig_active_table') || '04'
+}
+
+export default function App() {
+  const [role, setRole] = useState<AppRole>(getInitialRole)
+  const [adminView, setAdminView] = useState<'Overview' | 'Orders' | 'Menu' | 'Tables & QR' | 'Kitchen' | 'Kitchen Monitor' | 'Service Requests' | 'Reports' | 'Settings'>('Overview')
+  const [activeTable, setActiveTable] = useState<string>(getInitialTable)
   const [toast, setToast] = useState('')
-  const [apiOnline, setApiOnline] = useState<boolean | null>(null)
-  const activeTable = scannedTable || '04'
-  const apiUrl = `${API_URL}/api/orders`
-  useEffect(() => { localStorage.setItem('menu-items', JSON.stringify(items)) }, [items])
-  useEffect(() => { localStorage.setItem('orders', JSON.stringify(orders)) }, [orders])
+
+  const { items, loading: menuLoading, error: menuError, save: saveMenu, saving: menuSaving, reload: reloadMenu } = useMenu()
+  const { orders, changeStatus, offline: ordersOffline, refresh: refreshOrders } = useOrders(true)
+  const {
+    requests: serviceRequests,
+    reload: reloadServiceRequests,
+    acceptRequest: acceptServiceReq,
+    setStatus: setServiceReqStatus,
+    reassign: reassignServiceReq,
+  } = useServiceRequests(true)
+
+  const restaurantName = localStorage.getItem('sprig_restaurant_name') || 'Moss & Ember'
+  const tagline = localStorage.getItem('sprig_restaurant_tagline') || 'Artisanal plates, craft brews, good company.'
+
+  // Resolve QR token if opened via ?t=token
   useEffect(() => {
-    const refreshOrders = () => fetch(apiUrl)
-      .then((response) => response.ok ? response.json() : Promise.reject(new Error(`Orders request failed (${response.status})`)))
-      .then((data: unknown) => {
-        if (!Array.isArray(data)) throw new Error('Invalid orders response')
-        setOrders(data.filter(isApiOrder).map((order) => fromApiOrder(order, items)))
-        setApiOnline(true)
-      })
-      .catch(() => setApiOnline(false))
-    refreshOrders()
-    const interval = window.setInterval(refreshOrders, 2000)
-    return () => window.clearInterval(interval)
-  }, [apiUrl, items])
-  useEffect(() => {
-    const syncOrders = (event: StorageEvent) => {
-      if (event.key === 'orders' && event.newValue) setOrders(JSON.parse(event.newValue) as Order[])
-    }
-    window.addEventListener('storage', syncOrders)
-    return () => window.removeEventListener('storage', syncOrders)
-  }, [])
-  useEffect(() => { if (toast) { const timer = setTimeout(() => setToast(''), 2600); return () => clearTimeout(timer) } }, [toast])
-  const customerMenuItems = items.map((item) => ({
-    ...item,
-    pricePaisa: Math.round(item.price * 100),
-  }))
-  const revenue = orders.filter(order => order.status !== 'Cancelled').reduce((sum, order) => sum + order.total, 0)
-  const pending = orders.filter(order => order.status === 'New').length
-  const cartTotal = cart.reduce((sum, line) => sum + line.item.price * line.quantity, 0)
-  const notify = (message: string) => setToast(message)
-  const updateStatus = async (id: string, status: Status) => {
-    try {
-      const response = await fetch(`${apiUrl}/${encodeURIComponent(id)}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
-      })
-      if (!response.ok) throw new Error(`The server rejected the status update (${response.status}).`)
-      setOrders((current) => current.map((order) => order.id === id ? { ...order, status } : order))
-      notify(`Order ${id} marked ${status.toLowerCase()}`)
-    } catch (error) {
-      notify(error instanceof Error ? error.message : 'Could not update the order. Check the API connection.')
-    }
-  }
-  const addToCart = (item: Item) => { setCart(current => { const found = current.find(line => line.item.id === item.id); return found ? current.map(line => line.item.id === item.id ? { ...line, quantity: line.quantity + 1 } : line) : [...current, { item, quantity: 1 }] }); notify(`${item.name} added to order`) }
-  const placeOrder = async () => {
-    if (!cart.length) return
-    try {
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tableNumber: activeTable,
-          items: cart.map(({ item, quantity }) => ({ itemId: item.id, quantity })),
-        }),
-      })
-      const body = await response.json().catch(() => null)
-      if (!response.ok) {
-        throw new Error(body?.error || `The server could not accept the order (${response.status}).`)
-      }
-      if (!body?.order || !isApiOrder(body.order)) {
-        throw new Error('The server response did not include a valid order.')
-      }
-      const order = fromApiOrder(body.order, items)
-      setOrders((current) => [order, ...current.filter((entry) => entry.id !== order.id)])
-      setCart([])
-      notify(`Order ${order.id} sent to the kitchen`)
-    } catch (error) {
-      notify(error instanceof Error ? error.message : 'Could not place the order. Check the API connection and try again.')
-    }
-  }
-  return <div className="app-shell"><aside className="sidebar"><div className="brand"><span className="brand-mark">s</span><span>sprig<span className="brand-dot">.</span></span></div><div className="restaurant-switch"><span className="avatar">M</span><span><b>Moss & Ember</b><small>Restaurant account</small></span><span className="chevron">⌄</span></div><nav>{['Overview', 'Orders', 'Menu', 'Tables & QR', 'Kitchen', 'Reports'].map((entry, index) => <button className={view === entry ? 'nav-item active' : 'nav-item'} onClick={() => setView(entry)} key={entry}><span className="nav-icon">{['⌂', '▤', '◈', '⌗', '◉', '◒'][index]}</span>{entry}{entry === 'Orders' && pending > 0 && <i>{pending}</i>}</button>)}</nav><div className="sidebar-bottom"><button className="nav-item"><span className="nav-icon">⚙</span>Settings</button><div className="profile"><span className="avatar dark">JD</span><span><b>Jordan Davis</b><small>Owner</small></span><span>•••</span></div></div></aside><main className="main-content"><header className="topbar"><div className="mobile-brand"><span className="brand-mark">s</span> sprig<span className="brand-dot">.</span></div><div className="breadcrumb">Moss & Ember <span>/</span> {view}</div><div className="top-actions">{apiOnline !== null && <span role="status" style={{ fontSize: '0.75rem', color: apiOnline ? '#166534' : '#991b1b', fontWeight: 600 }}>{apiOnline ? '● Order server connected' : '● Order server offline — run npm run api'}</span>}<button className="icon-button" aria-label="Notifications">♧<b className="notification-dot" /></button><button className="preview-button" onClick={() => setView('Customer view')}>Preview menu ↗</button></div></header>{view === 'Customer view' ? <CustomerOrderView table={activeTable} items={customerMenuItems} restaurantName="Moss & Ember" tagline="Seasonal plates, bright drinks, good company." /> : <AdminView view={view} items={items} setItems={setItems} orders={orders} updateStatus={updateStatus} revenue={revenue} pending={pending} notify={notify} cart={cart} addToCart={addToCart} cartTotal={cartTotal} placeOrder={placeOrder} />}</main>{toast && <div className="toast">✓ {toast}</div>}</div>
-}
-
-function AdminView({ view, items, setItems, orders, updateStatus, revenue, pending, notify, cart, addToCart, cartTotal, placeOrder }: { view: string; items: Item[]; setItems: (items: Item[]) => void; orders: Order[]; updateStatus: (id: string, status: Status) => void; revenue: number; pending: number; notify: (message: string) => void; cart: { item: Item; quantity: number }[]; addToCart: (item: Item) => void; cartTotal: number; placeOrder: () => void }) { if (view === 'Menu') return <MenuView items={items} setItems={setItems} notify={notify} cart={cart} addToCart={addToCart} cartTotal={cartTotal} placeOrder={placeOrder} />; if (view === 'Kitchen') return <KitchenView orders={orders} updateStatus={updateStatus} />; if (view === 'Orders') return <OrdersView orders={orders} updateStatus={updateStatus} />; if (view === 'Tables & QR') return <TablesView notify={notify} />; if (view === 'Reports') return <ReportsView orders={orders} />; return <Overview orders={orders} revenue={revenue} pending={pending} updateStatus={updateStatus} /> }
-function PageTitle({ eyebrow, title, action }: { eyebrow: string; title: string; action?: React.ReactNode }) { return <div className="page-title"><div><p className="eyebrow">{eyebrow}</p><h1>{title}</h1></div>{action}</div> }
-function Overview({ orders, revenue, pending, updateStatus }: { orders: Order[]; revenue: number; pending: number; updateStatus: (id: string, status: Status) => void }) { const stats = [["Today's orders", String(orders.length + 14), '↑ 12.5%', 'up'], ["Today's revenue", money(revenue + 218), '↑ 8.2%', 'up'], ['Needs attention', String(pending), '2 new', 'warm'], ['Completed', String(orders.filter(order => order.status === 'Completed').length + 18), 'Today', 'neutral']]; return <div className="page"><PageTitle eyebrow="Monday, October 14, 2024" title="Good afternoon, Jordan" action={<button className="primary-button" onClick={() => alert('New order intake is ready from the customer menu.')}>＋ New order</button>} /><section className="stat-grid">{stats.map(stat => <div className="stat-card" key={stat[0]}><span>{stat[0]}</span><strong>{stat[1]}</strong><small className={stat[3]}>{stat[2]}</small></div>)}</section><section className="content-grid"><div className="panel revenue-panel"><div className="panel-heading"><div><h2>Revenue overview</h2><p>Sales performance across this week</p></div><select><option>This week</option><option>This month</option></select></div><div className="chart"><div className="chart-grid"><span>Rs. 1k</span><span>Rs. 750</span><span>Rs. 500</span><span>Rs. 250</span><span>Rs. 0</span></div><svg viewBox="0 0 640 190" preserveAspectRatio="none" aria-label="Revenue chart"><path d="M0 148 C55 140, 70 92, 122 112 S185 159, 240 112 S315 90, 365 105 S412 144, 470 84 S520 78, 566 55 S615 30, 640 43" fill="none" stroke="#cf5c3a" strokeWidth="3" /><path d="M0 148 C55 140, 70 92, 122 112 S185 159, 240 112 S315 90, 365 105 S412 144, 470 84 S520 78, 566 55 S615 30, 640 43 V190 H0 Z" fill="url(#fill)" opacity=".35" /><defs><linearGradient id="fill" x1="0" y1="0" x2="0" y2="1"><stop stopColor="#cf5c3a" /><stop offset="1" stopColor="#fff5ed" /></linearGradient></defs></svg><div className="chart-days"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div></div></div><div className="panel popular-panel"><div className="panel-heading"><div><h2>Popular items</h2><p>Best performers today</p></div><button className="text-button">View all →</button></div>{[...new Set(orders.flatMap(order => order.items.map(line => line.item)))].slice(0, 3).map((item, index) => <div className="popular-item" key={item.id}><img src={item.image} alt="" /><span><b>{item.name}</b><small>{[31, 24, 18][index]} orders</small></span><strong>{money(item.price)}</strong></div>)}</div></section><section className="panel recent-panel"><div className="panel-heading"><div><h2>Recent orders</h2><p>Live order activity from your floor</p></div><button className="text-button" onClick={() => updateStatus(orders[0]?.id || '', 'Completed')}>Mark latest complete →</button></div><OrderTable orders={orders.slice(0, 4)} updateStatus={updateStatus} /></section></div> }
-function OrderTable({ orders, updateStatus }: { orders: Order[]; updateStatus: (id: string, status: Status) => void }) { return <div className="table-wrap"><table><thead><tr><th>Order</th><th>Table</th><th>Items</th><th>Total</th><th>Status</th><th>Placed</th><th /></tr></thead><tbody>{orders.map(order => <tr key={order.id}><td><b>{order.id}</b></td><td>{order.table}</td><td><div className="order-items">{order.items.map(line => <span key={line.item.id}>{line.quantity}× {line.item.name}</span>)}</div></td><td><b>{money(order.total)}</b></td><td><span className={`status ${order.status.toLowerCase()}`}>{order.status}</span></td><td>{order.time}</td><td><select className="status-select" value={order.status} onChange={event => updateStatus(order.id, event.target.value as Status)}><option>New</option><option>Preparing</option><option>Ready</option><option>Completed</option><option>Cancelled</option></select></td></tr>)}</tbody></table></div> }
-function OrdersView({ orders, updateStatus }: { orders: Order[]; updateStatus: (id: string, status: Status) => void }) { return <div className="page"><PageTitle eyebrow="Operations" title="Orders" action={<div className="filter-tabs"><button className="selected">All orders</button><button>Active</button><button>Completed</button></div>} /><div className="panel"><div className="panel-heading"><div><h2>Order queue <span className="count-pill">{orders.length}</span></h2><p>Every order from your restaurant</p></div><button className="secondary-button">Export CSV ↓</button></div><OrderTable orders={orders} updateStatus={updateStatus} /></div></div> }
-function KitchenView({ orders, updateStatus }: { orders: Order[]; updateStatus: (id: string, status: Status) => void }) { const columns: Status[] = ['New', 'Preparing', 'Ready']; return <div className="page kitchen-page"><PageTitle eyebrow="Live service · Updated just now" title="Kitchen display" action={<span className="live-indicator"><i /> Live</span>} /><div className="kitchen-board">{columns.map(status => <div className="kitchen-column" key={status}><div className="column-heading"><h2>{status}</h2><span>{orders.filter(order => order.status === status).length}</span></div>{orders.filter(order => order.status === status).map(order => <article className="ticket" key={order.id}><div className="ticket-top"><b>{order.id}</b><span>{order.time}</span></div><h3>{order.table}</h3>{order.items.map(line => <p key={line.item.id}><b>{line.quantity}×</b> {line.item.name}</p>)}{order.note && <div className="note">Note: {order.note}</div>}<button className="ticket-action" onClick={() => updateStatus(order.id, status === 'New' ? 'Preparing' : status === 'Preparing' ? 'Ready' : 'Completed')}>{status === 'New' ? 'Start preparing' : status === 'Preparing' ? 'Mark ready' : 'Complete order'} →</button></article>)}</div>)}</div></div> }
-function MenuView({ items, setItems, notify, cart, addToCart, cartTotal, placeOrder }: { items: Item[]; setItems: (items: Item[]) => void; notify: (message: string) => void; cart: { item: Item; quantity: number }[]; addToCart: (item: Item) => void; cartTotal: number; placeOrder: () => void }) { const [newName, setNewName] = useState(''); const toggle = (id: number) => setItems(items.map(item => item.id === id ? { ...item, available: !item.available } : item)); const add = () => { if (!newName.trim()) return; setItems([...items, { id: Date.now(), name: newName, description: 'Freshly prepared in our kitchen.', price: 10, category: 'Mains', image: 'https://images.unsplash.com/photo-1547592180-85f173990554?w=700&q=80', available: true, prep: 12, tags: ['New'] }]); setNewName(''); notify('Menu item added') }; return <div className="page"><PageTitle eyebrow="Menu management · 24 items" title="Your menu" action={<button className="primary-button" onClick={add}>＋ Add item</button>} /><div className="menu-toolbar"><div className="filter-tabs"><button className="selected">All items</button><button>Available</button><button>Hidden</button></div><input value={newName} onChange={event => setNewName(event.target.value)} onKeyDown={event => event.key === 'Enter' && add()} placeholder="Quick add item name…" /></div><div className="menu-list">{items.map(item => <article className="menu-row" key={item.id}><img src={item.image} alt="" /><div className="menu-info"><div><h2>{item.name}</h2>{item.tags.map(tag => <span className="tag" key={tag}>{tag}</span>)}</div><p>{item.description}</p><small>{item.category} · {item.prep} min prep</small></div><strong>{money(item.price)}</strong><button className="add-admin-item" disabled={!item.available} onClick={() => addToCart(item)}>{item.available ? 'Add order' : 'Unavailable'}</button><button className={item.available ? 'toggle on' : 'toggle'} onClick={() => toggle(item.id)} aria-label={`Toggle ${item.name}`}>{item.available ? 'On' : 'Off'}</button><button className="more-button" onClick={() => notify('Edit panel ready for this item')}>•••</button></article>)}</div>{cart.length > 0 && <div className="cart-bar admin-cart"><div><b>{cart.reduce((sum, line) => sum + line.quantity, 0)} items in staff order</b><span> · {money(cartTotal)}</span></div><button onClick={placeOrder}>Send to kitchen →</button></div>}</div> }
-function isLoopbackHost(hostname: string) {
-  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname === '[::1]' || hostname.endsWith('.localhost')
-}
-
-function resolveQrBaseUrl() {
-  const configuredUrl = import.meta.env.VITE_PUBLIC_URL?.trim()
-  if (configuredUrl) {
-    try {
-      if (!isLoopbackHost(new URL(configuredUrl).hostname)) return configuredUrl.replace(/\/$/, '')
-    } catch {
-      return configuredUrl.replace(/\/$/, '')
-    }
-  }
-  return isLoopbackHost(window.location.hostname) ? '' : window.location.origin.replace(/\/$/, '')
-}
-
-function QRCard({ table, notify }: { table: string; notify: (message: string) => void }) {
-  const [src, setSrc] = useState('')
-  const [publicUrl, setPublicUrl] = useState(resolveQrBaseUrl)
-  const [urlError, setUrlError] = useState('')
-  const [qrError, setQrError] = useState('')
-
-  useEffect(() => {
-    if (publicUrl) return
-    let cancelled = false
-    fetch('/api/lan-info')
-      .then((response) => {
-        if (!response.ok) throw new Error(`LAN address lookup returned ${response.status}`)
-        return response.json() as Promise<{ lanIp?: string | null }>
-      })
-      .then(({ lanIp }) => {
-        if (cancelled) return
-        if (typeof lanIp !== 'string' || !lanIp.trim()) throw new Error('No LAN IPv4 address was found')
-        const port = window.location.port ? `:${window.location.port}` : ''
-        setPublicUrl(`${window.location.protocol}//${lanIp.trim()}${port}`)
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) {
-          setUrlError(error instanceof Error ? error.message : 'Could not detect this computer’s LAN address')
+    const rawToken = new URLSearchParams(window.location.search).get('t')
+    if (rawToken) {
+      verifyTableToken(rawToken).then((resolved) => {
+        if (resolved) {
+          const t = resolved.replace(/\D/g, '').padStart(2, '0') || '04'
+          setActiveTable(t)
+          localStorage.setItem('sprig_active_table', t)
         }
       })
-    return () => {
-      cancelled = true
     }
-  }, [publicUrl])
+  }, [])
 
-  const qrUrl = publicUrl ? `${publicUrl}/customer?restaurant=moss-ember&table=${encodeURIComponent(table)}` : ''
   useEffect(() => {
-    if (!qrUrl) return
-    let cancelled = false
-    setQrError('')
-    QRCode.toDataURL(qrUrl, { width: 180, margin: 1, color: { dark: '#244537', light: '#ffffff' } })
-      .then((dataUrl) => {
-        if (!cancelled) setSrc(dataUrl)
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) setQrError(error instanceof Error ? error.message : 'Could not generate QR code')
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [qrUrl])
+    localStorage.setItem('sprig_active_table', activeTable)
+  }, [activeTable])
 
-  const download = () => {
-    if (!src) return
-    const link = document.createElement('a')
-    link.download = `moss-ember-table-${table}.png`
-    link.href = src
-    link.click()
-    notify(`QR code for table ${table} downloaded`)
+  useEffect(() => {
+    if (!toast) return
+    const timer = setTimeout(() => setToast(''), 2600)
+    return () => clearTimeout(timer)
+  }, [toast])
+
+  const notify = (msg: string) => setToast(msg)
+
+  const handleStatusChange = async (id: string, status: OrderStatus) => {
+    const ok = await changeStatus(id, status)
+    if (ok) {
+      notify(`Order ${id} marked ${status.toLowerCase()}`)
+    } else {
+      notify(`Could not update order ${id}`)
+    }
   }
 
-  return <div className="qr-placeholder">
-    {src ? <img src={src} alt={`QR code for table ${table}`} /> : <span>{urlError || qrError || (publicUrl ? 'Generating QR…' : 'Finding Wi-Fi address…')}</span>}
-    <small>SCAN FOR TABLE {table}</small>
-    {publicUrl && <small>{publicUrl}</small>}
-    <button className="qr-download" onClick={download} disabled={!src}>Download QR</button>
-  </div>
-}
-function TablesView({ notify }: { notify: (message: string) => void }) { const tables = Array.from({ length: 12 }, (_, index) => ({ number: String(index + 1).padStart(2, '0'), capacity: index % 3 === 0 ? 6 : 4, status: index === 1 || index === 6 ? 'Occupied' : index === 4 ? 'Reserved' : 'Available' })); return <div className="page"><PageTitle eyebrow="Floor plan · 12 tables" title="Tables & QR codes" action={<button className="primary-button" onClick={() => notify('New table created')}>＋ Add table</button>} /><div className="table-grid">{tables.map(table => <article className="table-card" key={table.number}><div className="table-card-top"><span className={`table-status ${table.status.toLowerCase()}`} />{table.status}<button onClick={() => notify(`Table ${table.number} settings opened`)}>⌗</button></div><div className="table-number">{table.number}</div><p>Table {table.number} · Seats {table.capacity}</p><QRCard table={table.number} notify={notify} /><button className="secondary-button full" onClick={() => window.print()}>Print QR</button></article>)}</div></div> }
-function ReportsView({ orders }: { orders: Order[] }) { const average = orders.length ? orders.reduce((sum, order) => sum + order.total, 0) / orders.length : 0; return <div className="page"><PageTitle eyebrow="Insights · October 2024" title="Reports" action={<button className="secondary-button">Download report ↓</button>} /><div className="stat-grid"><div className="stat-card"><span>Gross sales</span><strong>{money(orders.reduce((sum, order) => sum + order.total, 0))}</strong><small className="up">↑ 8.2%</small></div><div className="stat-card"><span>Order volume</span><strong>{orders.length + 42}</strong><small className="up">↑ 14.1%</small></div><div className="stat-card"><span>Average order</span><strong>{money(average || 27.5)}</strong><small className="neutral">Per order</small></div></div><div className="content-grid"><div className="panel report-panel"><h2>Sales by category</h2><p>Share of total revenue</p>{['Mains', 'Small plates', 'Breakfast', 'Drinks'].map((name, index) => <div className="bar-row" key={name}><span>{name}</span><div><i style={{ width: `${[78, 54, 42, 30][index]}%` }} /></div><b>{[48, 26, 16, 10][index]}%</b></div>)}</div><div className="panel report-panel"><h2>Peak ordering times</h2><p>Orders by hour, today</p><div className="mini-bars">{[20, 36, 58, 42, 70, 88, 54, 38, 52, 76, 62, 45].map((height, index) => <i style={{ height: `${height}%` }} key={index} />)}</div><div className="chart-days"><span>8am</span><span>10am</span><span>12pm</span><span>2pm</span><span>4pm</span><span>6pm</span></div></div></div></div> }
-function CustomerView({ table, items, categories, category, setCategory, search, setSearch, cart, addToCart, cartTotal, placeOrder }: { table: string; items: Item[]; categories: string[]; category: string; setCategory: (value: string) => void; search: string; setSearch: (value: string) => void; cart: { item: Item; quantity: number }[]; addToCart: (item: Item) => void; cartTotal: number; placeOrder: () => void }) { return <div className="customer-page"><div className="customer-hero"><span className="customer-logo">m&e</span><span className="customer-table">Table {table} · <b>Open menu</b></span><h1>Moss & Ember</h1><p>Seasonal plates, bright drinks, good company.</p></div><div className="customer-content"><div className="customer-toolbar"><h2>Good food, no waiting.</h2><label>⌕<input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search the menu" /></label></div><div className="category-scroll">{categories.map(entry => <button className={category === entry ? 'selected' : ''} onClick={() => setCategory(entry)} key={entry}>{entry}</button>)}</div><div className="customer-menu">{items.map(item => <article className="food-card" key={item.id}><img src={item.image} alt={item.name} /><div><div className="food-card-heading"><span><h3>{item.name}</h3><p>{item.description}</p></span><strong>{money(item.price)}</strong></div><button onClick={() => addToCart(item)}>Add to order <span>＋</span></button></div></article>)}</div></div>{cart.length > 0 && <div className="cart-bar"><div><b>{cart.reduce((sum, line) => sum + line.quantity, 0)} items</b><span> · {money(cartTotal)}</span></div><button onClick={placeOrder}>Review order →</button></div>}</div> }
+  const handleRoleSwitch = (newRole: AppRole) => {
+    setRole(newRole)
+    const url = new URL(window.location.href)
+    url.searchParams.set('role', newRole)
+    if (newRole === 'customer') {
+      url.searchParams.set('table', activeTable)
+    } else {
+      url.searchParams.delete('t')
+      url.searchParams.delete('table')
+    }
+    window.history.replaceState({}, '', url.toString())
+  }
 
-export default App
+  const handleDataReset = () => {
+    void reloadMenu()
+    refreshOrders()
+    notify('Reset restaurant data to defaults')
+  }
+
+  const activeKitchenOrders = orders.filter((o) => o.status !== 'Completed' && o.status !== 'Cancelled')
+  const newOrdersCount = orders.filter((o) => o.status === 'New').length
+  const pendingServiceCount = serviceRequests.filter((r) => r.status === 'Pending').length
+
+  return (
+    <div className="role-app-root">
+      {/* Universal Top Role Selector Bar */}
+      <header
+        className="role-switcher-bar"
+        style={{
+          background: '#15241d',
+          borderBottom: '1px solid #284435',
+          color: '#e2e8f0',
+          padding: '0.5rem 1.25rem',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '0.75rem',
+          position: 'sticky',
+          top: 0,
+          zIndex: 1000,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 700, color: '#f8fafc' }}>
+            <span
+              style={{
+                background: 'var(--green)',
+                color: 'white',
+                borderRadius: '6px',
+                width: '24px',
+                height: '24px',
+                display: 'inline-grid',
+                placeItems: 'center',
+                font: 'italic bold 16px Georgia',
+              }}
+            >
+              s
+            </span>
+            <span style={{ fontSize: '1rem', letterSpacing: '-0.5px' }}>
+              sprig<span style={{ color: 'var(--rust)' }}>.</span>
+            </span>
+          </div>
+
+          <span style={{ color: '#475569', fontSize: '0.8rem' }}>|</span>
+
+          <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 500 }}>
+            Active Mode:
+          </span>
+        </div>
+
+        {/* 3 Core Roles Buttons */}
+        <div
+          className="role-buttons-group"
+          style={{
+            display: 'inline-flex',
+            background: '#0d1813',
+            padding: '3px',
+            borderRadius: '8px',
+            border: '1px solid #233b2f',
+            gap: '2px',
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => handleRoleSwitch('customer')}
+            style={{
+              padding: '0.4rem 0.85rem',
+              borderRadius: '6px',
+              border: 0,
+              fontSize: '0.82rem',
+              fontWeight: role === 'customer' ? 700 : 500,
+              background: role === 'customer' ? 'var(--green)' : 'transparent',
+              color: role === 'customer' ? 'white' : '#94a3b8',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <span>📱 Customer</span>
+            <small style={{ opacity: 0.85, fontSize: '0.72rem' }}>
+              (Table {activeTable})
+            </small>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleRoleSwitch('kitchen')}
+            style={{
+              padding: '0.4rem 0.85rem',
+              borderRadius: '6px',
+              border: 0,
+              fontSize: '0.82rem',
+              fontWeight: role === 'kitchen' ? 700 : 500,
+              background: role === 'kitchen' ? '#cf5c3a' : 'transparent',
+              color: role === 'kitchen' ? 'white' : '#94a3b8',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <span>👨‍🍳 Kitchen Display</span>
+            {activeKitchenOrders.length > 0 && (
+              <span
+                style={{
+                  background: role === 'kitchen' ? 'white' : '#ef4444',
+                  color: role === 'kitchen' ? '#cf5c3a' : 'white',
+                  borderRadius: '10px',
+                  padding: '1px 6px',
+                  fontSize: '0.7rem',
+                  fontWeight: 700,
+                }}
+              >
+                {activeKitchenOrders.length}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleRoleSwitch('waiter')}
+            style={{
+              padding: '0.4rem 0.85rem',
+              borderRadius: '6px',
+              border: 0,
+              fontSize: '0.82rem',
+              fontWeight: role === 'waiter' ? 700 : 500,
+              background: role === 'waiter' ? '#d97706' : 'transparent',
+              color: role === 'waiter' ? 'white' : '#94a3b8',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <span>🧑‍💼 Waiter Staff</span>
+            {pendingServiceCount > 0 && (
+              <span
+                style={{
+                  background: role === 'waiter' ? 'white' : '#ef4444',
+                  color: role === 'waiter' ? '#d97706' : 'white',
+                  borderRadius: '10px',
+                  padding: '1px 6px',
+                  fontSize: '0.7rem',
+                  fontWeight: 700,
+                }}
+              >
+                {pendingServiceCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleRoleSwitch('admin')}
+            style={{
+              padding: '0.4rem 0.85rem',
+              borderRadius: '6px',
+              border: 0,
+              fontSize: '0.82rem',
+              fontWeight: role === 'admin' ? 700 : 500,
+              background: role === 'admin' ? '#2563eb' : 'transparent',
+              color: role === 'admin' ? 'white' : '#94a3b8',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <span>👑 Admin Console</span>
+          </button>
+        </div>
+
+        {/* Status / Quick Table Toggle */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.8rem' }}>
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              color: ordersOffline ? '#f87171' : '#4ade80',
+              fontWeight: 600,
+              fontSize: '0.75rem',
+            }}
+          >
+            <span
+              style={{
+                width: '7px',
+                height: '7px',
+                borderRadius: '50%',
+                background: ordersOffline ? '#ef4444' : '#22c55e',
+                boxShadow: ordersOffline ? 'none' : '0 0 6px #22c55e',
+              }}
+            />
+            {ordersOffline ? 'Offline Cache' : 'Live Sync Online'}
+          </span>
+        </div>
+      </header>
+
+      {/* Main Role Content */}
+      {role === 'customer' && (
+        <main className="role-content customer-role-view">
+          <CustomerView
+            table={activeTable}
+            items={items}
+            restaurantName={restaurantName}
+            tagline={tagline}
+            onChangeTable={(newT) => {
+              setActiveTable(newT)
+              notify(`Table switched to ${newT}`)
+            }}
+          />
+        </main>
+      )}
+
+      {role === 'kitchen' && (
+        <main className="role-content kitchen-role-view" style={{ background: '#f5f3ed', minHeight: 'calc(100vh - 45px)' }}>
+          <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '1.5rem' }}>
+            <KitchenView orders={orders} onStatusChange={handleStatusChange} />
+          </div>
+        </main>
+      )}
+
+      {role === 'waiter' && (
+        <main className="role-content waiter-role-view" style={{ minHeight: 'calc(100vh - 45px)' }}>
+          <WaiterView
+            requests={serviceRequests}
+            onAccept={acceptServiceReq}
+            onStatusChange={(id, status, waiterId) => setServiceReqStatus(id, status, waiterId, false)}
+            onRelease={(id, waiterId) => reassignServiceReq(id, { waiterId, isAdmin: false })}
+            onRefresh={reloadServiceRequests}
+          />
+        </main>
+      )}
+
+      {role === 'admin' && (
+        <div className="app-shell">
+          <Sidebar
+            view={adminView}
+            onNavigate={(newView) => setAdminView(newView)}
+            pendingCount={newOrdersCount}
+            activeKitchenCount={activeKitchenOrders.length}
+            pendingServiceCount={pendingServiceCount}
+          />
+          <main className="main-content">
+            <header className="topbar">
+              <div className="mobile-brand">
+                <span className="brand-mark">s</span> sprig<span className="brand-dot">.</span>
+              </div>
+              <div className="breadcrumb">
+                {restaurantName} <span>/</span> {adminView}
+              </div>
+              <div className="top-actions">
+                <span
+                  style={{
+                    fontSize: '0.78rem',
+                    background: '#f8fafc',
+                    color: '#475569',
+                    border: '1px solid #cbd5e1',
+                    padding: '0.35rem 0.75rem',
+                    borderRadius: '20px',
+                    fontWeight: 600,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                  }}
+                >
+                  <span>👁️ Supervisory Monitor</span>
+                </span>
+                <span className="live-indicator">
+                  <i /> Live Sync
+                </span>
+              </div>
+            </header>
+
+            {menuLoading && <div className="loading-note" style={{ padding: '1rem', color: 'var(--muted)' }}>Loading live menu…</div>}
+            {menuError && <div style={{ padding: '1rem', color: '#b91c1c' }}>{menuError}</div>}
+
+            {adminView === 'Overview' && (
+              <OverviewView orders={orders} />
+            )}
+
+            {adminView === 'Orders' && (
+              <OrdersView orders={orders} onStatusChange={handleStatusChange} />
+            )}
+
+            {adminView === 'Menu' && (
+              <MenuView
+                items={items}
+                onSave={saveMenu}
+                saving={menuSaving}
+                error={menuError}
+              />
+            )}
+
+            {adminView === 'Tables & QR' && (
+              <TablesView orders={orders} />
+            )}
+
+            {(adminView === 'Kitchen' || adminView === 'Kitchen Monitor') && (
+              <KitchenView orders={orders} readOnly={true} />
+            )}
+
+            {adminView === 'Service Requests' && (
+              <ServiceRequestsAdminView
+                requests={serviceRequests}
+                onReassign={(id, params) => reassignServiceReq(id, params)}
+                onStatusChange={(id, status, isAdmin) => setServiceReqStatus(id, status, undefined, isAdmin)}
+              />
+            )}
+
+            {adminView === 'Reports' && (
+              <ReportsView orders={orders} />
+            )}
+
+            {adminView === 'Settings' && (
+              <SettingsView onDataReset={handleDataReset} />
+            )}
+          </main>
+        </div>
+      )}
+
+      <Toast message={toast} />
+    </div>
+  )
+}

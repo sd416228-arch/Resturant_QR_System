@@ -1,5 +1,23 @@
 [
   {
+    "id": "#54031",
+    "table": "Table 04",
+    "tableNumber": "04",
+    "totalPaisa": 280000,
+    "status": "Preparing",
+    "note": "Spicy please",
+    "isoTime": "2026-10-09T18:19:14.031Z",
+    "items": [
+      {
+        "itemId": 1,
+        "name": "Truffle eggs on toast",
+        "pricePaisa": 140000,
+        "quantity": 2
+      }
+    ],
+    "time": "6:19 PM"
+  },
+  {
     "id": "#48201",
     "table": "Table 02",
     "tableNumber": "02",
@@ -18,7 +36,7 @@
       }
     ],
     "totalPaisa": 420000,
-    "status": "New",
+    "status": "Preparing",
     "time": "7:18 PM",
     "isoTime": "2026-09-29T19:18:00.000Z",
     "note": "Extra sesame aioli on the side please"
@@ -42,7 +60,7 @@
       }
     ],
     "totalPaisa": 300000,
-    "status": "New",
+    "status": "Preparing",
     "time": "7:12 PM",
     "isoTime": "2026-09-29T19:12:00.000Z",
     "note": "Gluten sensitive"

@@ -37,3 +37,40 @@ export interface CartLine {
   item: MenuItem
   quantity: number
 }
+
+export type ServiceRequestType =
+  | 'water'
+  | 'bill'
+  | 'cutlery'
+  | 'order_help'
+  | 'general'
+  | 'other'
+
+export type ServiceRequestStatus =
+  | 'Pending'
+  | 'Accepted'
+  | 'In Progress'
+  | 'Completed'
+  | 'Cancelled'
+
+export interface ServiceRequest {
+  id: string
+  restaurantId: string
+  tableNumber: string
+  requestType: ServiceRequestType
+  message?: string
+  status: ServiceRequestStatus
+  assignedWaiterId?: string
+  assignedWaiterName?: string
+  createdAt: string
+  acceptedAt?: string
+  startedAt?: string
+  completedAt?: string
+  updatedAt: string
+}
+
+export interface WaiterProfile {
+  id: string
+  name: string
+  role: 'waiter'
+}
